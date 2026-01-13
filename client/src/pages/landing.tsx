@@ -1,29 +1,41 @@
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { ThemeToggle } from "@/components/theme-toggle";
-import { Clock, Shield, BarChart3, Users, CheckCircle, ArrowRight } from "lucide-react";
+import { Link } from "wouter";
+import {
+  Clock,
+  Shield,
+  BarChart3,
+  Users,
+  CheckCircle,
+  ArrowRight,
+} from "lucide-react";
 
 export default function LandingPage() {
   const features = [
     {
       icon: Clock,
       title: "Easy Submissions",
-      description: "Submit overtime hours in seconds with our intuitive form. Track time ranges or enter total hours directly.",
+      description:
+        "Submit overtime hours in seconds with our intuitive form. Track time ranges or enter total hours directly.",
     },
     {
       icon: Shield,
       title: "Streamlined Approvals",
-      description: "Department-wise approval queues with real-time notifications. Approve or reject with detailed comments.",
+      description:
+        "Department-wise approval queues with real-time notifications. Approve or reject with detailed comments.",
     },
     {
       icon: BarChart3,
       title: "Comprehensive Reports",
-      description: "Generate detailed reports by employee, department, or date range. Export to CSV for payroll processing.",
+      description:
+        "Generate detailed reports by employee, department, or date range. Export to CSV for payroll processing.",
     },
     {
       icon: Users,
       title: "Role-Based Access",
-      description: "Support for Employees, Approvers, and Admins with fine-grained permissions and multi-department support.",
+      description:
+        "Support for Employees, Approvers, and Admins with fine-grained permissions and multi-department support.",
     },
   ];
 
@@ -40,7 +52,7 @@ export default function LandingPage() {
           <div className="flex items-center gap-3">
             <ThemeToggle />
             <Button asChild data-testid="button-login">
-              <a href="/api/login">Sign In</a>
+              <Link href="/auth">Sign In</Link>
             </Button>
           </div>
         </div>
@@ -58,20 +70,30 @@ export default function LandingPage() {
                     Management
                   </h1>
                   <p className="text-lg text-muted-foreground max-w-xl">
-                    A comprehensive solution for submitting, approving, and tracking 
-                    overtime hours across your organization. Built for efficiency and 
-                    compliance.
+                    A comprehensive solution for submitting, approving, and
+                    tracking overtime hours across your organization. Built for
+                    efficiency and compliance.
                   </p>
                 </div>
 
                 <div className="flex flex-wrap gap-4">
-                  <Button size="lg" asChild className="gap-2" data-testid="button-get-started">
-                    <a href="/api/login">
+                  <Button
+                    size="lg"
+                    asChild
+                    className="gap-2"
+                    data-testid="button-get-started"
+                  >
+                    <Link href="/auth">
                       Get Started
                       <ArrowRight className="h-4 w-4" />
-                    </a>
+                    </Link>
                   </Button>
-                  <Button size="lg" variant="outline" asChild data-testid="button-learn-more">
+                  <Button
+                    size="lg"
+                    variant="outline"
+                    asChild
+                    data-testid="button-learn-more"
+                  >
                     <a href="#features">Learn More</a>
                   </Button>
                 </div>
@@ -113,7 +135,10 @@ export default function LandingPage() {
                       </div>
                       <div className="grid grid-cols-3 gap-3">
                         {[1, 2, 3].map((i) => (
-                          <div key={i} className="p-4 rounded-lg bg-card border">
+                          <div
+                            key={i}
+                            className="p-4 rounded-lg bg-card border"
+                          >
                             <div className="h-8 w-8 rounded bg-primary/10 mb-3" />
                             <div className="h-6 w-12 bg-muted rounded mb-1" />
                             <div className="h-3 w-16 bg-muted/60 rounded" />
@@ -122,7 +147,10 @@ export default function LandingPage() {
                       </div>
                       <div className="space-y-2">
                         {[1, 2, 3].map((i) => (
-                          <div key={i} className="flex items-center justify-between p-3 rounded-lg bg-card border">
+                          <div
+                            key={i}
+                            className="flex items-center justify-between p-3 rounded-lg bg-card border"
+                          >
                             <div className="flex items-center gap-3">
                               <div className="h-8 w-8 rounded-full bg-muted" />
                               <div className="space-y-1">
@@ -147,7 +175,8 @@ export default function LandingPage() {
             <div className="text-center mb-12">
               <h2 className="text-3xl font-bold mb-4">Everything You Need</h2>
               <p className="text-muted-foreground max-w-2xl mx-auto">
-                A complete suite of tools for managing overtime hours, from submission to approval to reporting.
+                A complete suite of tools for managing overtime hours, from
+                submission to approval to reporting.
               </p>
             </div>
 
@@ -159,7 +188,9 @@ export default function LandingPage() {
                       <feature.icon className="h-6 w-6 text-primary" />
                     </div>
                     <h3 className="font-semibold mb-2">{feature.title}</h3>
-                    <p className="text-sm text-muted-foreground">{feature.description}</p>
+                    <p className="text-sm text-muted-foreground">
+                      {feature.description}
+                    </p>
                   </CardContent>
                 </Card>
               ))}
@@ -171,14 +202,19 @@ export default function LandingPage() {
           <div className="max-w-4xl mx-auto text-center">
             <h2 className="text-3xl font-bold mb-4">Ready to Get Started?</h2>
             <p className="text-muted-foreground mb-8 max-w-2xl mx-auto">
-              Join organizations that trust OvertimeTracker for their hours management needs.
-              Set up in minutes, not days.
+              Join organizations that trust OvertimeTracker for their hours
+              management needs. Set up in minutes, not days.
             </p>
-            <Button size="lg" asChild className="gap-2" data-testid="button-cta-signup">
-              <a href="/api/login">
+            <Button
+              size="lg"
+              asChild
+              className="gap-2"
+              data-testid="button-cta-signup"
+            >
+              <Link href="/auth">
                 Start Using OvertimeTracker
                 <ArrowRight className="h-4 w-4" />
-              </a>
+              </Link>
             </Button>
           </div>
         </section>

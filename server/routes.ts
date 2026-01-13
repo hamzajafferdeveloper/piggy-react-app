@@ -1,7 +1,7 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { setupAuth, isAuthenticated, registerAuthRoutes } from "./replit_integrations/auth";
+import { isAuthenticated } from "./auth";
 import { insertDepartmentSchema, insertHoursSubmissionSchema } from "@shared/schema";
 import { z } from "zod";
 
@@ -9,14 +9,13 @@ export async function registerRoutes(
   httpServer: Server,
   app: Express
 ): Promise<Server> {
-  // Setup authentication BEFORE other routes
-  await setupAuth(app);
-  registerAuthRoutes(app);
+  // Authentication is handled in index.ts via setupAuth
 
   // Helper to get user ID from request
   const getUserId = (req: any): string => {
-    return req.user?.claims?.sub;
+    return req.user?.id;
   };
+
 
   // Helper to check if user has role
   const hasRole = async (userId: string, role: string): Promise<boolean> => {

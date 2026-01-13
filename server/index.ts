@@ -1,7 +1,12 @@
+import "dotenv/config";
 import express, { type Request, Response, NextFunction } from "express";
+
 import { registerRoutes } from "./routes";
 import { serveStatic } from "./static";
 import { createServer } from "http";
+
+import { setupAuth } from "./auth";
+import cookieParser from "cookie-parser";
 
 const app = express();
 const httpServer = createServer(app);
@@ -12,6 +17,7 @@ declare module "http" {
   }
 }
 
+app.use(cookieParser());
 app.use(
   express.json({
     verify: (req, _res, buf) => {
@@ -33,6 +39,7 @@ export function log(message: string, source = "express") {
   console.log(`${formattedTime} [${source}] ${message}`);
 }
 
+// Log requests
 app.use((req, res, next) => {
   const start = Date.now();
   const path = req.path;
@@ -60,7 +67,9 @@ app.use((req, res, next) => {
 });
 
 (async () => {
+  setupAuth(app);
   await registerRoutes(httpServer, app);
+
 
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
     const status = err.status || err.statusCode || 500;
@@ -69,6 +78,8 @@ app.use((req, res, next) => {
     res.status(status).json({ message });
     throw err;
   });
+
+
 
   // importantly only setup vite in development and after
   // setting up all the other routes so the catch-all route
@@ -89,8 +100,8 @@ app.use((req, res, next) => {
     {
       port,
       host: "0.0.0.0",
-      reusePort: true,
     },
+
     () => {
       log(`serving on port ${port}`);
     },

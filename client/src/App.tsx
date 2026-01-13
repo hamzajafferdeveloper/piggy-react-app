@@ -1,4 +1,4 @@
-import { Switch, Route } from "wouter";
+import { Switch, Route, Redirect } from "wouter";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
@@ -10,6 +10,7 @@ import { ThemeToggle } from "@/components/theme-toggle";
 import { Skeleton } from "@/components/ui/skeleton";
 import NotFound from "@/pages/not-found";
 import LandingPage from "@/pages/landing";
+import AuthPage from "@/pages/auth-page";
 import Dashboard from "@/pages/dashboard";
 import SubmitHours from "@/pages/submit-hours";
 import Records from "@/pages/records";
@@ -34,9 +35,7 @@ function AppLayout({ children }: { children: React.ReactNode }) {
             <SidebarTrigger data-testid="button-sidebar-toggle" />
             <ThemeToggle />
           </header>
-          <main className="flex-1 p-6 overflow-auto">
-            {children}
-          </main>
+          <main className="flex-1 p-6 overflow-auto">{children}</main>
         </div>
       </div>
     </SidebarProvider>
@@ -81,11 +80,15 @@ function Router() {
     return <LoadingScreen />;
   }
 
-  if (!user) {
-    return <LandingPage />;
-  }
-
-  return <AuthenticatedRouter />;
+  return (
+    <Switch>
+      <Route path="/auth" component={AuthPage} />
+      <Route path="/">
+        {!user ? <LandingPage /> : <Redirect to="/dashboard" />}
+      </Route>
+      <Route>{!user ? <Redirect to="/auth" /> : <AuthenticatedRouter />}</Route>
+    </Switch>
+  );
 }
 
 function App() {

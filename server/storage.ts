@@ -18,9 +18,13 @@ import {
   type AuditLog,
   type InsertAuditLog,
   users,
+  type User,
+  type UpsertUser as InsertUser,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, desc, sql, gte, lte } from "drizzle-orm";
+import { randomUUID } from "crypto";
+
 
 export interface IStorage {
   // Departments
@@ -70,6 +74,10 @@ export interface IStorage {
   getAuditLogs(limit?: number): Promise<any[]>;
 
   // Users
+  getUser(id: string): Promise<User | undefined>;
+  getUserByEmail(email: string): Promise<User | undefined>;
+  createUser(data: InsertUser): Promise<User>;
+  getAllUsers(): Promise<User[]>;
   getAllUsersWithRoles(): Promise<any[]>;
 }
 
@@ -85,12 +93,15 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createDepartment(data: InsertDepartment): Promise<Department> {
-    const [dept] = await db.insert(departments).values(data).returning();
+    const id = randomUUID();
+    await db.insert(departments).values({ ...data, id });
+    const [dept] = await db.select().from(departments).where(eq(departments.id, id));
     return dept;
   }
 
   async updateDepartment(id: string, data: Partial<InsertDepartment>): Promise<Department | undefined> {
-    const [dept] = await db.update(departments).set(data).where(eq(departments.id, id)).returning();
+    await db.update(departments).set(data).where(eq(departments.id, id));
+    const [dept] = await db.select().from(departments).where(eq(departments.id, id));
     return dept;
   }
 
@@ -125,15 +136,18 @@ export class DatabaseStorage implements IStorage {
     // Insert new roles
     if (roles.length > 0) {
       await db.insert(userRoles).values(
-        roles.map(role => ({ userId, role: role as "employee" | "approver" | "admin" }))
+        roles.map(role => ({ id: randomUUID(), userId, role: role as "employee" | "approver" | "admin" }))
       );
     }
+
     
     return this.getUserRoles(userId);
   }
 
   async addUserRole(data: InsertUserRole): Promise<UserRole> {
-    const [role] = await db.insert(userRoles).values(data).returning();
+    const id = randomUUID();
+    await db.insert(userRoles).values({ ...data, id });
+    const [role] = await db.select().from(userRoles).where(eq(userRoles.id, id));
     return role;
   }
 
@@ -217,7 +231,9 @@ export class DatabaseStorage implements IStorage {
   }
 
   async addEmployeeToDepartment(data: InsertEmployeeDepartment): Promise<EmployeeDepartment> {
-    const [result] = await db.insert(employeeDepartments).values(data).returning();
+    const id = randomUUID();
+    await db.insert(employeeDepartments).values({ ...data, id });
+    const [result] = await db.select().from(employeeDepartments).where(eq(employeeDepartments.id, id));
     return result;
   }
 
@@ -304,7 +320,9 @@ export class DatabaseStorage implements IStorage {
   }
 
   async addDepartmentApprover(data: InsertDepartmentApprover): Promise<DepartmentApprover> {
-    const [result] = await db.insert(departmentApprovers).values(data).returning();
+    const id = randomUUID();
+    await db.insert(departmentApprovers).values({ ...data, id });
+    const [result] = await db.select().from(departmentApprovers).where(eq(departmentApprovers.id, id));
     return result;
   }
 
@@ -317,7 +335,9 @@ export class DatabaseStorage implements IStorage {
 
   // Hours Submissions
   async createSubmission(data: InsertHoursSubmission): Promise<HoursSubmission> {
-    const [submission] = await db.insert(hoursSubmissions).values(data).returning();
+    const id = randomUUID();
+    await db.insert(hoursSubmissions).values({ ...data, id });
+    const [submission] = await db.select().from(hoursSubmissions).where(eq(hoursSubmissions.id, id));
     return submission;
   }
 
@@ -384,7 +404,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async approveSubmission(id: string, approverId: string, status: "approved" | "rejected", comment?: string): Promise<HoursSubmission | undefined> {
-    const [updated] = await db.update(hoursSubmissions)
+    await db.update(hoursSubmissions)
       .set({
         status,
         approvedBy: approverId,
@@ -392,8 +412,9 @@ export class DatabaseStorage implements IStorage {
         approverComment: comment || null,
         updatedAt: new Date(),
       })
-      .where(eq(hoursSubmissions.id, id))
-      .returning();
+      .where(eq(hoursSubmissions.id, id));
+    
+    const [updated] = await db.select().from(hoursSubmissions).where(eq(hoursSubmissions.id, id));
     return updated;
   }
 
@@ -456,7 +477,9 @@ export class DatabaseStorage implements IStorage {
 
   // Audit Logs
   async createAuditLog(data: InsertAuditLog): Promise<AuditLog> {
-    const [log] = await db.insert(auditLogs).values(data).returning();
+    const id = randomUUID();
+    await db.insert(auditLogs).values({ ...data, id });
+    const [log] = await db.select().from(auditLogs).where(eq(auditLogs.id, id));
     return log;
   }
 
@@ -474,16 +497,34 @@ export class DatabaseStorage implements IStorage {
   // Users
   async getAllUsersWithRoles(): Promise<any[]> {
     const allUsers = await db.select().from(users);
-    
-    return Promise.all(allUsers.map(async (user) => {
-      const roles = await this.getUserRoles(user.id);
-      const empDepts = await this.getEmployeeDepartments(user.id);
-      const depts = await Promise.all(empDepts.map(async (ed) => {
-        const [dept] = await db.select().from(departments).where(eq(departments.id, ed.departmentId));
-        return dept;
-      }));
-      return { ...user, roles, departments: depts.filter(Boolean) };
-    }));
+    const usersWithRoles = await Promise.all(
+      allUsers.map(async (user) => {
+        const roles = await this.getUserRoles(user.id);
+        return { ...user, roles };
+      }),
+    );
+    return usersWithRoles;
+  }
+
+  async getUser(id: string): Promise<User | undefined> {
+    const [user] = await db.select().from(users).where(eq(users.id, id));
+    return user;
+  }
+
+  async getUserByEmail(email: string): Promise<User | undefined> {
+    const [user] = await db.select().from(users).where(eq(users.email, email));
+    return user;
+  }
+
+  async createUser(data: InsertUser): Promise<User> {
+    const id = randomUUID();
+    await db.insert(users).values({ ...data, id });
+    const [user] = await db.select().from(users).where(eq(users.id, id));
+    return user;
+  }
+
+  async getAllUsers(): Promise<User[]> {
+    return db.select().from(users);
   }
 }
 

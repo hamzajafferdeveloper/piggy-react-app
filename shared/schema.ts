@@ -1,76 +1,74 @@
 import { sql, relations } from "drizzle-orm";
-import { pgTable, text, varchar, timestamp, real, boolean, pgEnum } from "drizzle-orm/pg-core";
+import { mysqlTable, text, varchar, timestamp, double, boolean, mysqlEnum } from "drizzle-orm/mysql-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
 // Re-export auth models
 export * from "./models/auth";
 
-// Enums
-export const userRoleEnum = pgEnum("user_role", ["employee", "approver", "admin"]);
-export const submissionStatusEnum = pgEnum("submission_status", ["pending", "approved", "rejected"]);
-
 // Departments table
-export const departments = pgTable("departments", {
-  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  name: text("name").notNull().unique(),
+export const departments = mysqlTable("departments", {
+  id: varchar("id", { length: 36 }).primaryKey(),
+  name: varchar("name", { length: 191 }).notNull().unique(),
+
   description: text("description"),
   createdAt: timestamp("created_at").defaultNow(),
 });
 
 // User roles - allows multi-role support
-export const userRoles = pgTable("user_roles", {
-  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  userId: varchar("user_id").notNull(),
-  role: userRoleEnum("role").notNull().default("employee"),
+export const userRoles = mysqlTable("user_roles", {
+  id: varchar("id", { length: 36 }).primaryKey(),
+  userId: varchar("user_id", { length: 36 }).notNull(),
+  role: mysqlEnum("role", ["employee", "approver", "admin"]).notNull().default("employee"),
   createdAt: timestamp("created_at").defaultNow(),
 });
 
 // Employee-Department assignments
-export const employeeDepartments = pgTable("employee_departments", {
-  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  userId: varchar("user_id").notNull(),
-  departmentId: varchar("department_id").notNull(),
+export const employeeDepartments = mysqlTable("employee_departments", {
+  id: varchar("id", { length: 36 }).primaryKey(),
+  userId: varchar("user_id", { length: 36 }).notNull(),
+  departmentId: varchar("department_id", { length: 36 }).notNull(),
   createdAt: timestamp("created_at").defaultNow(),
 });
 
 // Department approvers
-export const departmentApprovers = pgTable("department_approvers", {
-  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  userId: varchar("user_id").notNull(),
-  departmentId: varchar("department_id").notNull(),
+export const departmentApprovers = mysqlTable("department_approvers", {
+  id: varchar("id", { length: 36 }).primaryKey(),
+  userId: varchar("user_id", { length: 36 }).notNull(),
+  departmentId: varchar("department_id", { length: 36 }).notNull(),
   createdAt: timestamp("created_at").defaultNow(),
 });
 
 // Hours submissions
-export const hoursSubmissions = pgTable("hours_submissions", {
-  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  userId: varchar("user_id").notNull(),
-  departmentId: varchar("department_id").notNull(),
+export const hoursSubmissions = mysqlTable("hours_submissions", {
+  id: varchar("id", { length: 36 }).primaryKey(),
+  userId: varchar("user_id", { length: 36 }).notNull(),
+  departmentId: varchar("department_id", { length: 36 }).notNull(),
   date: timestamp("date").notNull(),
   startTime: text("start_time"),
   endTime: text("end_time"),
-  totalHours: real("total_hours").notNull(),
+  totalHours: double("total_hours").notNull(),
   notes: text("notes"),
-  status: submissionStatusEnum("status").notNull().default("pending"),
-  approvedBy: varchar("approved_by"),
+  status: mysqlEnum("status", ["pending", "approved", "rejected"]).notNull().default("pending"),
+  approvedBy: varchar("approved_by", { length: 36 }),
   approvedAt: timestamp("approved_at"),
   approverComment: text("approver_comment"),
   createdAt: timestamp("created_at").defaultNow(),
-  updatedAt: timestamp("updated_at").defaultNow(),
+  updatedAt: timestamp("updated_at").onUpdateNow(),
 });
 
 // Audit log
-export const auditLogs = pgTable("audit_logs", {
-  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  userId: varchar("user_id").notNull(),
+export const auditLogs = mysqlTable("audit_logs", {
+  id: varchar("id", { length: 36 }).primaryKey(),
+  userId: varchar("user_id", { length: 36 }).notNull(),
   action: text("action").notNull(),
   entityType: text("entity_type").notNull(),
-  entityId: varchar("entity_id"),
+  entityId: varchar("entity_id", { length: 36 }),
   oldValue: text("old_value"),
   newValue: text("new_value"),
   createdAt: timestamp("created_at").defaultNow(),
 });
+
 
 // Relations
 export const departmentsRelations = relations(departments, ({ many }) => ({
