@@ -242,7 +242,7 @@ export default function AuthPage() {
             </Tabs>
           </CardContent>
           <CardFooter className="flex justify-center text-sm text-muted-foreground">
-            © 2026 Shift Management System
+            © 2026 OverTime Tracker
           </CardFooter>
         </Card>
       </div>
