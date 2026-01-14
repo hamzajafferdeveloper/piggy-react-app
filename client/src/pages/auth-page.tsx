@@ -24,7 +24,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useLocation } from "wouter";
 import { useEffect } from "react";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2 } from "lucide-react";
+import { Clock, Link, Loader2 } from "lucide-react";
+import { ThemeToggle } from "@/components/theme-toggle";
 
 const loginSchema = z.object({
   email: z.string().email("Invalid email address"),
