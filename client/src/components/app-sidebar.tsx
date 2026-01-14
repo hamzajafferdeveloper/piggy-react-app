@@ -28,7 +28,7 @@ import {
   LogOut,
 } from "lucide-react";
 
-type UserRole = "employee" | "approver" | "admin";
+type UserRole = "employee" | "approver" | "admin" | "hr";
 
 interface UserRoleData {
   role: UserRole;
@@ -43,10 +43,17 @@ export function AppSidebar() {
     enabled: !!user,
   });
 
-  const roles = userRoles?.map(r => r.role) || ["employee"];
+  const roles = userRoles?.map((r) => r.role) || ["employee"];
   const isAdmin = roles.includes("admin");
-  const isApprover = roles.includes("approver") || isAdmin;
-  const primaryRole = isAdmin ? "admin" : isApprover ? "approver" : "employee";
+  const isHR = roles.includes("hr") || isAdmin;
+  const isApprover = roles.includes("approver") || isHR;
+  const primaryRole = isAdmin
+    ? "admin"
+    : isHR
+    ? "hr"
+    : isApprover
+    ? "approver"
+    : "employee";
 
   const employeeMenuItems = [
     { title: "Dashboard", url: "/dashboard", icon: LayoutDashboard },
@@ -96,11 +103,13 @@ export function AppSidebar() {
             <SidebarMenu>
               {employeeMenuItems.map((item) => (
                 <SidebarMenuItem key={item.title}>
-                  <SidebarMenuButton
-                    asChild
-                    isActive={location === item.url}
-                  >
-                    <Link href={item.url} data-testid={`nav-${item.title.toLowerCase().replace(/\s+/g, '-')}`}>
+                  <SidebarMenuButton asChild isActive={location === item.url}>
+                    <Link
+                      href={item.url}
+                      data-testid={`nav-${item.title
+                        .toLowerCase()
+                        .replace(/\s+/g, "-")}`}
+                    >
                       <item.icon className="h-4 w-4" />
                       <span>{item.title}</span>
                     </Link>
@@ -118,11 +127,13 @@ export function AppSidebar() {
               <SidebarMenu>
                 {approverMenuItems.map((item) => (
                   <SidebarMenuItem key={item.title}>
-                    <SidebarMenuButton
-                      asChild
-                      isActive={location === item.url}
-                    >
-                      <Link href={item.url} data-testid={`nav-${item.title.toLowerCase().replace(/\s+/g, '-')}`}>
+                    <SidebarMenuButton asChild isActive={location === item.url}>
+                      <Link
+                        href={item.url}
+                        data-testid={`nav-${item.title
+                          .toLowerCase()
+                          .replace(/\s+/g, "-")}`}
+                      >
                         <item.icon className="h-4 w-4" />
                         <span>{item.title}</span>
                       </Link>
@@ -143,9 +154,17 @@ export function AppSidebar() {
                   <SidebarMenuItem key={item.title}>
                     <SidebarMenuButton
                       asChild
-                      isActive={location === item.url || location.startsWith(item.url + "/")}
+                      isActive={
+                        location === item.url ||
+                        location.startsWith(item.url + "/")
+                      }
                     >
-                      <Link href={item.url} data-testid={`nav-${item.title.toLowerCase().replace(/\s+/g, '-')}`}>
+                      <Link
+                        href={item.url}
+                        data-testid={`nav-${item.title
+                          .toLowerCase()
+                          .replace(/\s+/g, "-")}`}
+                      >
                         <item.icon className="h-4 w-4" />
                         <span>{item.title}</span>
                       </Link>
@@ -161,13 +180,19 @@ export function AppSidebar() {
       <SidebarFooter className="p-4 border-t border-sidebar-border">
         <div className="flex items-center gap-3 mb-3">
           <Avatar className="h-10 w-10">
-            <AvatarImage src={user?.profileImageUrl || undefined} alt="Profile" />
+            <AvatarImage
+              src={user?.profileImageUrl || undefined}
+              alt="Profile"
+            />
             <AvatarFallback className="bg-primary/10 text-primary font-medium">
               {getInitials()}
             </AvatarFallback>
           </Avatar>
           <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium truncate" data-testid="text-user-name">
+            <p
+              className="text-sm font-medium truncate"
+              data-testid="text-user-name"
+            >
               {user?.firstName && user?.lastName
                 ? `${user.firstName} ${user.lastName}`
                 : user?.email || "User"}

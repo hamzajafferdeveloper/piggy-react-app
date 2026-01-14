@@ -19,7 +19,7 @@ export const departments = mysqlTable("departments", {
 export const userRoles = mysqlTable("user_roles", {
   id: varchar("id", { length: 36 }).primaryKey(),
   userId: varchar("user_id", { length: 36 }).notNull(),
-  role: mysqlEnum("role", ["employee", "approver", "admin"]).notNull().default("employee"),
+  role: mysqlEnum("role", ["employee", "approver", "admin", "hr"]).notNull().default("employee"),
   createdAt: timestamp("created_at").defaultNow(),
 });
 
@@ -49,10 +49,12 @@ export const hoursSubmissions = mysqlTable("hours_submissions", {
   endTime: text("end_time"),
   totalHours: double("total_hours").notNull(),
   notes: text("notes"),
-  status: mysqlEnum("status", ["pending", "approved", "rejected"]).notNull().default("pending"),
+  status: mysqlEnum("status", ["pending", "approved", "rejected", "escalated"]).notNull().default("pending"),
   approvedBy: varchar("approved_by", { length: 36 }),
   approvedAt: timestamp("approved_at"),
   approverComment: text("approver_comment"),
+  escalatedAt: timestamp("escalated_at"),
+  escalationReason: text("escalation_reason"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").onUpdateNow(),
 });

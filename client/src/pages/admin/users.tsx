@@ -1,10 +1,30 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Checkbox } from "@/components/ui/checkbox";
 import { RoleBadge } from "@/components/role-badge";
@@ -21,7 +41,7 @@ interface UserWithRoles extends User {
   departments: Department[];
 }
 
-type RoleType = "employee" | "approver" | "admin";
+type RoleType = "employee" | "approver" | "admin" | "hr";
 
 export default function ManageUsers() {
   const { toast } = useToast();
@@ -39,7 +59,13 @@ export default function ManageUsers() {
   });
 
   const updateRolesMutation = useMutation({
-    mutationFn: async ({ userId, roles }: { userId: string; roles: RoleType[] }) => {
+    mutationFn: async ({
+      userId,
+      roles,
+    }: {
+      userId: string;
+      roles: RoleType[];
+    }) => {
       return apiRequest("PUT", `/api/admin/users/${userId}/roles`, { roles });
     },
     onSuccess: () => {
@@ -57,7 +83,9 @@ export default function ManageUsers() {
           description: "Logging in again...",
           variant: "destructive",
         });
-        setTimeout(() => { window.location.href = "/api/login"; }, 500);
+        setTimeout(() => {
+          window.location.href = "/api/login";
+        }, 500);
         return;
       }
       toast({
@@ -69,7 +97,9 @@ export default function ManageUsers() {
   });
 
   const filteredUsers = users?.filter((user) => {
-    const name = `${user.firstName || ""} ${user.lastName || ""} ${user.email || ""}`.toLowerCase();
+    const name = `${user.firstName || ""} ${user.lastName || ""} ${
+      user.email || ""
+    }`.toLowerCase();
     return name.includes(searchQuery.toLowerCase());
   });
 
@@ -84,23 +114,22 @@ export default function ManageUsers() {
   };
 
   const getPrimaryRole = (roles: UserRole[]): RoleType => {
-    const roleNames = roles.map(r => r.role);
+    const roleNames = roles.map((r) => r.role);
     if (roleNames.includes("admin")) return "admin";
+    if (roleNames.includes("hr")) return "hr";
     if (roleNames.includes("approver")) return "approver";
     return "employee";
   };
 
   const openEditDialog = (user: UserWithRoles) => {
     setSelectedUser(user);
-    setSelectedRoles(user.roles.map(r => r.role as RoleType));
+    setSelectedRoles(user.roles.map((r) => r.role as RoleType));
   };
 
   const toggleRole = (role: RoleType) => {
     if (role === "employee") return; // Employee is always required
-    setSelectedRoles(prev => 
-      prev.includes(role) 
-        ? prev.filter(r => r !== role)
-        : [...prev, role]
+    setSelectedRoles((prev) =>
+      prev.includes(role) ? prev.filter((r) => r !== role) : [...prev, role]
     );
   };
 
@@ -116,7 +145,9 @@ export default function ManageUsers() {
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold">Manage Users</h1>
-        <p className="text-muted-foreground">View and manage user accounts and their roles</p>
+        <p className="text-muted-foreground">
+          View and manage user accounts and their roles
+        </p>
       </div>
 
       <Card>
@@ -142,7 +173,9 @@ export default function ManageUsers() {
           <CardTitle>User Directory</CardTitle>
           <CardDescription>
             {filteredUsers
-              ? `${filteredUsers.length} user${filteredUsers.length !== 1 ? "s" : ""} found`
+              ? `${filteredUsers.length} user${
+                  filteredUsers.length !== 1 ? "s" : ""
+                } found`
               : "Loading..."}
           </CardDescription>
         </CardHeader>
@@ -154,20 +187,36 @@ export default function ManageUsers() {
               <table className="w-full">
                 <thead>
                   <tr className="border-b text-left">
-                    <th className="py-3 px-4 text-sm font-medium text-muted-foreground uppercase tracking-wider">User</th>
-                    <th className="py-3 px-4 text-sm font-medium text-muted-foreground uppercase tracking-wider">Email</th>
-                    <th className="py-3 px-4 text-sm font-medium text-muted-foreground uppercase tracking-wider">Role</th>
-                    <th className="py-3 px-4 text-sm font-medium text-muted-foreground uppercase tracking-wider">Departments</th>
-                    <th className="py-3 px-4 text-sm font-medium text-muted-foreground uppercase tracking-wider text-right">Actions</th>
+                    <th className="py-3 px-4 text-sm font-medium text-muted-foreground uppercase tracking-wider">
+                      User
+                    </th>
+                    <th className="py-3 px-4 text-sm font-medium text-muted-foreground uppercase tracking-wider">
+                      Email
+                    </th>
+                    <th className="py-3 px-4 text-sm font-medium text-muted-foreground uppercase tracking-wider">
+                      Role
+                    </th>
+                    <th className="py-3 px-4 text-sm font-medium text-muted-foreground uppercase tracking-wider">
+                      Departments
+                    </th>
+                    <th className="py-3 px-4 text-sm font-medium text-muted-foreground uppercase tracking-wider text-right">
+                      Actions
+                    </th>
                   </tr>
                 </thead>
                 <tbody>
                   {filteredUsers.map((user) => (
-                    <tr key={user.id} className="border-b last:border-0 hover-elevate" data-testid={`row-user-${user.id}`}>
+                    <tr
+                      key={user.id}
+                      className="border-b last:border-0 hover-elevate"
+                      data-testid={`row-user-${user.id}`}
+                    >
                       <td className="py-4 px-4">
                         <div className="flex items-center gap-3">
                           <Avatar className="h-9 w-9">
-                            <AvatarImage src={user.profileImageUrl || undefined} />
+                            <AvatarImage
+                              src={user.profileImageUrl || undefined}
+                            />
                             <AvatarFallback className="bg-primary/10 text-primary">
                               {getInitials(user)}
                             </AvatarFallback>
@@ -187,7 +236,10 @@ export default function ManageUsers() {
                       <td className="py-4 px-4">
                         <div className="flex flex-wrap gap-1">
                           {user.roles.map((role) => (
-                            <RoleBadge key={role.id} role={role.role as RoleType} />
+                            <RoleBadge
+                              key={role.id}
+                              role={role.role as RoleType}
+                            />
                           ))}
                           {user.roles.length === 0 && (
                             <RoleBadge role="employee" />
@@ -196,7 +248,7 @@ export default function ManageUsers() {
                       </td>
                       <td className="py-4 px-4 text-sm text-muted-foreground max-w-xs truncate">
                         {user.departments && user.departments.length > 0
-                          ? user.departments.map(d => d.name).join(", ")
+                          ? user.departments.map((d) => d.name).join(", ")
                           : "None assigned"}
                       </td>
                       <td className="py-4 px-4">
@@ -222,7 +274,11 @@ export default function ManageUsers() {
             <EmptyState
               icon={Users}
               title="No users found"
-              description={searchQuery ? "No users match your search criteria." : "No users registered yet."}
+              description={
+                searchQuery
+                  ? "No users match your search criteria."
+                  : "No users registered yet."
+              }
             />
           )}
         </CardContent>
@@ -233,7 +289,8 @@ export default function ManageUsers() {
           <DialogHeader>
             <DialogTitle>Edit User Roles</DialogTitle>
             <DialogDescription>
-              Manage roles for {selectedUser?.firstName} {selectedUser?.lastName || selectedUser?.email}
+              Manage roles for {selectedUser?.firstName}{" "}
+              {selectedUser?.lastName || selectedUser?.email}
             </DialogDescription>
           </DialogHeader>
 
@@ -243,23 +300,48 @@ export default function ManageUsers() {
                 <Checkbox checked disabled />
                 <div className="flex-1">
                   <p className="font-medium">Employee</p>
-                  <p className="text-sm text-muted-foreground">Base role for all users (cannot be removed)</p>
+                  <p className="text-sm text-muted-foreground">
+                    Base role for all users (cannot be removed)
+                  </p>
                 </div>
               </div>
-              
-              <div className="flex items-center gap-3 p-3 rounded-lg border hover-elevate cursor-pointer" onClick={() => toggleRole("approver")}>
+
+              <div
+                className="flex items-center gap-3 p-3 rounded-lg border hover-elevate cursor-pointer"
+                onClick={() => toggleRole("approver")}
+              >
                 <Checkbox checked={selectedRoles.includes("approver")} />
                 <div className="flex-1">
                   <p className="font-medium">Approver</p>
-                  <p className="text-sm text-muted-foreground">Can approve/reject submissions for assigned departments</p>
+                  <p className="text-sm text-muted-foreground">
+                    Can approve/reject submissions for assigned departments
+                  </p>
                 </div>
               </div>
-              
-              <div className="flex items-center gap-3 p-3 rounded-lg border hover-elevate cursor-pointer" onClick={() => toggleRole("admin")}>
+
+              <div
+                className="flex items-center gap-3 p-3 rounded-lg border hover-elevate cursor-pointer"
+                onClick={() => toggleRole("admin")}
+              >
                 <Checkbox checked={selectedRoles.includes("admin")} />
                 <div className="flex-1">
                   <p className="font-medium">Admin</p>
-                  <p className="text-sm text-muted-foreground">Full system access including user and department management</p>
+                  <p className="text-sm text-muted-foreground">
+                    Full system access including user and department management
+                  </p>
+                </div>
+              </div>
+
+              <div
+                className="flex items-center gap-3 p-3 rounded-lg border hover-elevate cursor-pointer"
+                onClick={() => toggleRole("hr")}
+              >
+                <Checkbox checked={selectedRoles.includes("hr")} />
+                <div className="flex-1">
+                  <p className="font-medium">HR</p>
+                  <p className="text-sm text-muted-foreground">
+                    Can view and act only on escalated requests
+                  </p>
                 </div>
               </div>
             </div>

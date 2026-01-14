@@ -1,7 +1,7 @@
 import { Badge } from "@/components/ui/badge";
 import { User, Shield, Settings } from "lucide-react";
 
-type Role = "employee" | "approver" | "admin";
+type Role = "employee" | "approver" | "admin" | "hr";
 
 interface RoleBadgeProps {
   role: Role;
@@ -12,17 +12,26 @@ const roleConfig = {
   employee: {
     label: "Employee",
     icon: User,
-    className: "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400 border-blue-200 dark:border-blue-800",
+    className:
+      "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400 border-blue-200 dark:border-blue-800",
   },
   approver: {
     label: "Approver",
     icon: Shield,
-    className: "bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-400 border-purple-200 dark:border-purple-800",
+    className:
+      "bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-400 border-purple-200 dark:border-purple-800",
   },
   admin: {
     label: "Admin",
     icon: Settings,
-    className: "bg-rose-100 text-rose-800 dark:bg-rose-900/30 dark:text-rose-400 border-rose-200 dark:border-rose-800",
+    className:
+      "bg-rose-100 text-rose-800 dark:bg-rose-900/30 dark:text-rose-400 border-rose-200 dark:border-rose-800",
+  },
+  hr: {
+    label: "HR",
+    icon: Shield,
+    className:
+      "bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-400 border-orange-200 dark:border-orange-800",
   },
 };
 
@@ -31,8 +40,8 @@ export function RoleBadge({ role, className = "" }: RoleBadgeProps) {
   const Icon = config.icon;
 
   return (
-    <Badge 
-      variant="outline" 
+    <Badge
+      variant="outline"
       className={`${config.className} ${className} gap-1.5 font-medium`}
       data-testid={`badge-role-${role}`}
     >

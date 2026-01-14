@@ -22,7 +22,7 @@ import {
   type UpsertUser as InsertUser,
 } from "@shared/schema";
 import { db } from "./db";
-import { eq, and, desc, sql, gte, lte } from "drizzle-orm";
+import { eq, and, or, desc, sql, gte, lte } from "drizzle-orm";
 import { randomUUID } from "crypto";
 
 
@@ -62,7 +62,10 @@ export interface IStorage {
   getSubmissionsWithDetails(userId?: string): Promise<any[]>;
   getPendingApprovals(approverId: string): Promise<any[]>;
   getAllPendingApprovals(): Promise<any[]>;
+  getEscalatedApprovals(): Promise<any[]>;
   approveSubmission(id: string, approverId: string, status: "approved" | "rejected", comment?: string): Promise<HoursSubmission | undefined>;
+  escalateSubmission(id: string, reason: string): Promise<HoursSubmission | undefined>;
+  autoEscalateSubmissions(): Promise<number>;
   getRecentSubmissions(limit?: number): Promise<any[]>;
 
   // Stats
@@ -381,7 +384,9 @@ export class DatabaseStorage implements IStorage {
       .orderBy(desc(hoursSubmissions.createdAt));
     
     const filtered = pendingSubmissions.filter(s => 
-      deptIds.includes(s.departmentId) && s.userId !== approverId // Self-approval restriction
+      deptIds.includes(s.departmentId) && 
+      s.userId !== approverId && 
+      s.status === "pending" // Only show non-escalated to regular approvers
     );
     
     return Promise.all(filtered.map(async (submission) => {
@@ -403,6 +408,18 @@ export class DatabaseStorage implements IStorage {
     }));
   }
 
+  async getEscalatedApprovals(): Promise<any[]> {
+    const escalatedSubmissions = await db.select().from(hoursSubmissions)
+      .where(eq(hoursSubmissions.status, "escalated"))
+      .orderBy(desc(hoursSubmissions.escalatedAt));
+    
+    return Promise.all(escalatedSubmissions.map(async (submission) => {
+      const [dept] = await db.select().from(departments).where(eq(departments.id, submission.departmentId));
+      const [user] = await db.select().from(users).where(eq(users.id, submission.userId));
+      return { ...submission, department: dept, user };
+    }));
+  }
+
   async approveSubmission(id: string, approverId: string, status: "approved" | "rejected", comment?: string): Promise<HoursSubmission | undefined> {
     await db.update(hoursSubmissions)
       .set({
@@ -416,6 +433,39 @@ export class DatabaseStorage implements IStorage {
     
     const [updated] = await db.select().from(hoursSubmissions).where(eq(hoursSubmissions.id, id));
     return updated;
+  }
+
+  async escalateSubmission(id: string, reason: string): Promise<HoursSubmission | undefined> {
+    await db.update(hoursSubmissions)
+      .set({
+        status: "escalated",
+        escalatedAt: new Date(),
+        escalationReason: reason,
+        updatedAt: new Date(),
+      })
+      .where(eq(hoursSubmissions.id, id));
+    
+    const [updated] = await db.select().from(hoursSubmissions).where(eq(hoursSubmissions.id, id));
+    return updated;
+  }
+
+  async autoEscalateSubmissions(): Promise<number> {
+    const fortyEightHoursAgo = new Date();
+    fortyEightHoursAgo.setHours(fortyEightHoursAgo.getHours() - 48);
+
+    const pendingToEscalate = await db.select().from(hoursSubmissions)
+      .where(and(
+        eq(hoursSubmissions.status, "pending"),
+        lte(hoursSubmissions.createdAt, fortyEightHoursAgo)
+      ));
+
+    if (pendingToEscalate.length === 0) return 0;
+
+    await Promise.all(pendingToEscalate.map(async (submission) => {
+      await this.escalateSubmission(submission.id, "Automatic escalation after 48 hours");
+    }));
+
+    return pendingToEscalate.length;
   }
 
   async getRecentSubmissions(limit = 10): Promise<any[]> {
@@ -454,7 +504,11 @@ export class DatabaseStorage implements IStorage {
   async getAdminStats(): Promise<{ totalEmployees: number; totalDepartments: number; pendingApprovals: number; hoursThisMonth: number }> {
     const allUsers = await db.select().from(users);
     const allDepts = await db.select().from(departments);
-    const pending = await db.select().from(hoursSubmissions).where(eq(hoursSubmissions.status, "pending"));
+    const pending = await db.select().from(hoursSubmissions)
+      .where(or(
+        eq(hoursSubmissions.status, "pending"),
+        eq(hoursSubmissions.status, "escalated")
+      ));
     
     const now = new Date();
     const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);

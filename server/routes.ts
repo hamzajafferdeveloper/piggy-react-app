@@ -30,7 +30,12 @@ export async function registerRoutes(
 
   // Helper to check if user is approver
   const isApprover = async (userId: string): Promise<boolean> => {
-    return hasRole(userId, "approver") || hasRole(userId, "admin");
+    return hasRole(userId, "approver") || hasRole(userId, "admin") || hasRole(userId, "hr");
+  };
+
+  // Helper to check if user is HR
+  const isHR = async (userId: string): Promise<boolean> => {
+    return hasRole(userId, "hr") || hasRole(userId, "admin");
   };
 
   // ===================
@@ -383,23 +388,67 @@ export async function registerRoutes(
     try {
       const userId = getUserId(req);
       
-      // Check if user is admin (can see all) or approver
+      // Trigger auto-escalation check
+      await storage.autoEscalateSubmissions();
+
+      let approvals: any[] = [];
+      
       if (await isAdmin(userId)) {
-        const approvals = await storage.getAllPendingApprovals();
-        // Filter out self-submissions
-        const filtered = approvals.filter(a => a.userId !== userId);
-        return res.json(filtered);
+        const pending = await storage.getAllPendingApprovals();
+        const escalated = await storage.getEscalatedApprovals();
+        approvals = [...pending, ...escalated];
+      } else if (await isHR(userId)) {
+        approvals = await storage.getEscalatedApprovals();
+      } else if (await isApprover(userId)) {
+        approvals = await storage.getPendingApprovals(userId);
       }
       
-      if (await isApprover(userId)) {
-        const approvals = await storage.getPendingApprovals(userId);
-        return res.json(approvals);
-      }
-      
-      res.json([]);
+      // Filter out self-submissions
+      const filtered = approvals.filter(a => a.userId !== userId);
+      res.json(filtered);
     } catch (error) {
       console.error("Error fetching pending approvals:", error);
       res.status(500).json({ message: "Failed to fetch pending approvals" });
+    }
+  });
+
+  app.post("/api/submissions/:id/escalate", isAuthenticated, async (req, res) => {
+    try {
+      const userId = getUserId(req);
+      const { id } = req.params;
+      const { reason } = req.body;
+      
+      if (!reason) {
+        return res.status(400).json({ message: "Reason is required for escalation" });
+      }
+      
+      const submission = await storage.getSubmission(id);
+      if (!submission) {
+        return res.status(404).json({ message: "Submission not found" });
+      }
+      
+      // Check if user is an approver for this department
+      const canEscalate = await isAdmin(userId) || 
+        await storage.isUserApproverForDepartment(userId, submission.departmentId);
+      
+      if (!canEscalate) {
+        return res.status(403).json({ message: "Not authorized to escalate this submission" });
+      }
+      
+      const updated = await storage.escalateSubmission(id, reason);
+      
+      await storage.createAuditLog({
+        userId,
+        action: "submission_escalated",
+        entityType: "submission",
+        entityId: id,
+        newValue: reason,
+      });
+      
+      res.json(updated);
+    } catch (error) {
+      console.error("Error escalating submission:", error);
+      res.status(500).json({ message: "Failed to escalate submission" });
     }
   });
 
@@ -429,8 +478,13 @@ export async function registerRoutes(
       }
       
       // Check if user can approve
-      const canApprove = await isAdmin(userId) || 
-        await storage.isUserApproverForDepartment(userId, submission.departmentId);
+      let canApprove = false;
+      if (submission.status === "escalated") {
+        canApprove = await isHR(userId);
+      } else {
+        canApprove = await isAdmin(userId) || 
+          await storage.isUserApproverForDepartment(userId, submission.departmentId);
+      }
       
       if (!canApprove) {
         return res.status(403).json({ message: "Not authorized to approve this submission" });
