@@ -94,6 +94,22 @@ export default function AuthPage() {
 
   return (
     <div className="min-h-screen grid lg:grid-cols-2">
+      <nav className="fixed top-0 left-0 right-0 z-50 backdrop-blur-md bg-background/80 border-b">
+        <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <div className="h-10 w-10 rounded-md bg-primary flex items-center justify-center">
+              <Clock className="h-6 w-6 text-primary-foreground" />
+            </div>
+            <span className="font-semibold text-xl">OvertimeTracker</span>
+          </div>
+          <div className="flex items-center gap-3">
+            <ThemeToggle />
+            <Button asChild data-testid="button-login">
+              <Link href="/auth">Sign In</Link>
+            </Button>
+          </div>
+        </div>
+      </nav>
       <div className="flex items-center justify-center p-8">
         <Card className="w-full max-w-md">
           <CardHeader>
