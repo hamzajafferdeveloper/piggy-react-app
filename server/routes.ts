@@ -1,5 +1,9 @@
-import type { Express } from "express";
+import express, { type Express, type Request } from "express";
 import { createServer, type Server } from "http";
+import fs from "fs";
+import path from "path";
+import multer from "multer";
+import { randomUUID } from "crypto";
 import { storage } from "./storage";
 import { isAuthenticated } from "./auth";
 import {
@@ -45,6 +49,38 @@ export async function registerRoutes(
   const isHR = async (userId: string): Promise<boolean> => {
     return hasRole(userId, "hr") || hasRole(userId, "admin");
   };
+
+  type UploadedFile = {
+    originalname: string;
+    filename: string;
+    mimetype: string;
+    size: number;
+  };
+
+  const uploadsDir = path.resolve(process.cwd(), "uploads");
+  if (!fs.existsSync(uploadsDir)) {
+    fs.mkdirSync(uploadsDir, { recursive: true });
+  }
+
+  app.use("/uploads", express.static(uploadsDir));
+
+  const upload = multer({
+    storage: multer.diskStorage({
+      destination: (
+        _req: Request,
+        _file: UploadedFile,
+        cb: (error: Error | null, destination: string) => void
+      ) => cb(null, uploadsDir),
+      filename: (
+        _req: Request,
+        file: UploadedFile,
+        cb: (error: Error | null, filename: string) => void
+      ) => {
+        const ext = path.extname(file.originalname);
+        cb(null, `${randomUUID()}${ext}`);
+      },
+    }),
+  });
 
   // ===================
   // USER ROLES
@@ -439,14 +475,29 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/submissions", isAuthenticated, async (req, res) => {
+  app.post(
+    "/api/submissions",
+    isAuthenticated,
+    upload.array("files"),
+    async (req, res) => {
     try {
       const userId = getUserId(req);
 
+      const uploadedFiles = ((req as Request).files as UploadedFile[] | undefined) || [];
+      const attachments = uploadedFiles.map((file) => ({
+        originalName: file.originalname,
+        filename: file.filename,
+        url: `/uploads/${file.filename}`,
+        mimeType: file.mimetype,
+        size: file.size,
+      }));
+
       const data = insertHoursSubmissionSchema.parse({
         ...req.body,
+        totalHours: Number(req.body.totalHours),
         userId,
         date: new Date(req.body.date),
+        attachments: attachments.length > 0 ? JSON.stringify(attachments) : null,
       });
 
       // Validate hours
@@ -455,6 +506,8 @@ export async function registerRoutes(
           .status(400)
           .json({ message: "Hours must be between 0.5 and 24" });
       }
+
+      console.log("Submission Data: ", data);
 
       const submission = await storage.createSubmission(data);
 
@@ -468,6 +521,7 @@ export async function registerRoutes(
       });
 
       res.status(201).json(submission);
+      
     } catch (error) {
       console.error("Error creating submission:", error);
       if (error instanceof z.ZodError) {

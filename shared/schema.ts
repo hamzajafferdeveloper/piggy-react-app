@@ -49,6 +49,7 @@ export const hoursSubmissions = mysqlTable("hours_submissions", {
   endTime: text("end_time"),
   totalHours: double("total_hours").notNull(),
   notes: text("notes"),
+  attachments: text("attachments"),
   status: mysqlEnum("status", ["pending", "approved", "rejected", "escalated"]).notNull().default("pending"),
   approvedBy: varchar("approved_by", { length: 36 }),
   approvedAt: timestamp("approved_at"),

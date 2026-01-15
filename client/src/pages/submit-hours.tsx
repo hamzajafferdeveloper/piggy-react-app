@@ -4,16 +4,40 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { z } from "zod";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Calendar } from "@/components/ui/calendar";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Form,
+  FormControl,
+  FormDescription,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from "@/components/ui/form";
 import { useToast } from "@/hooks/use-toast";
 import { FormSkeleton } from "@/components/loading-skeleton";
 import { apiRequest } from "@/lib/queryClient";
@@ -22,27 +46,36 @@ import { format } from "date-fns";
 import { CalendarIcon, Clock, ArrowLeft } from "lucide-react";
 import type { Department } from "@shared/schema";
 
-const formSchema = z.object({
-  departmentId: z.string().min(1, "Please select a department"),
-  date: z.date({ required_error: "Please select a date" }),
-  useTimeRange: z.boolean().default(false),
-  startTime: z.string().optional(),
-  endTime: z.string().optional(),
-  totalHours: z.coerce.number().min(0.5, "Minimum 0.5 hours").max(24, "Maximum 24 hours"),
-  notes: z.string().optional(),
-}).refine((data) => {
-  if (data.useTimeRange) {
-    return data.startTime && data.endTime;
-  }
-  return true;
-}, {
-  message: "Start and end time are required when using time range",
-  path: ["startTime"],
-});
+const formSchema = z
+  .object({
+    departmentId: z.string().min(1, "Please select a department"),
+    date: z.date({ required_error: "Please select a date" }),
+    useTimeRange: z.boolean().default(false),
+    startTime: z.string().optional(),
+    endTime: z.string().optional(),
+    totalHours: z.coerce.number().min(0.5).max(24),
+    notes: z.string().optional(),
+    files: z.array(z.instanceof(File)).optional(),
+  })
+  .refine(
+    (data) => {
+      if (data.useTimeRange) {
+        return data.startTime && data.endTime;
+      }
+      return true;
+    },
+    {
+      message: "Start and end time are required when using time range",
+      path: ["startTime"],
+    }
+  );
 
 type FormData = z.infer<typeof formSchema>;
 
-function calculateHoursFromTimeRange(startTime: string, endTime: string): number {
+function calculateHoursFromTimeRange(
+  startTime: string,
+  endTime: string
+): number {
   const [startHour, startMin] = startTime.split(":").map(Number);
   const [endHour, endMin] = endTime.split(":").map(Number);
   const startMinutes = startHour * 60 + startMin;
@@ -57,7 +90,9 @@ export default function SubmitHours() {
   const queryClient = useQueryClient();
   const [useTimeRange, setUseTimeRange] = useState(false);
 
-  const { data: departments, isLoading: departmentsLoading } = useQuery<Department[]>({
+  const { data: departments, isLoading: departmentsLoading } = useQuery<
+    Department[]
+  >({
     queryKey: ["/api/departments"],
   });
 
@@ -77,39 +112,116 @@ export default function SubmitHours() {
   const endTime = form.watch("endTime");
   const totalHours = form.watch("totalHours");
 
-  const calculatedHours = useTimeRange && startTime && endTime
-    ? calculateHoursFromTimeRange(startTime, endTime)
-    : totalHours;
+  const calculatedHours =
+    useTimeRange && startTime && endTime
+      ? calculateHoursFromTimeRange(startTime, endTime)
+      : totalHours;
+
+  // const submitMutation = useMutation({
+  //   mutationFn: async (data: FormData) => {
+  //     const payload = {
+  //       departmentId: data.departmentId,
+  //       date: data.date.toISOString(),
+  //       startTime: data.useTimeRange ? data.startTime : null,
+  //       endTime: data.useTimeRange ? data.endTime : null,
+  //       totalHours: data.useTimeRange
+  //         ? calculateHoursFromTimeRange(data.startTime!, data.endTime!)
+  //         : data.totalHours,
+  //       notes: data.notes || null,
+  //     };
+  //     return apiRequest("POST", "/api/submissions", payload);
+  //   },
+  //   onSuccess: () => {
+  //     toast({
+  //       title: "Success",
+  //       description: "Your hours submission has been sent for approval.",
+  //     });
+  //     queryClient.invalidateQueries({ queryKey: ["/api/submissions"] });
+  //     queryClient.invalidateQueries({ queryKey: ["/api/dashboard/stats"] });
+  //     navigate("/records");
+  //   },
+  //   onError: (error: Error) => {
+  //     if (isUnauthorizedError(error)) {
+  //       toast({
+  //         title: "Unauthorized",
+  //         description: "Logging in again...",
+  //         variant: "destructive",
+  //       });
+  //       setTimeout(() => {
+  //         window.location.href = "/api/login";
+  //       }, 500);
+  //       return;
+  //     }
+  //     toast({
+  //       title: "Error",
+  //       description: "Failed to submit hours. Please try again.",
+  //       variant: "destructive",
+  //     });
+  //   },
+  // });
 
   const submitMutation = useMutation({
     mutationFn: async (data: FormData) => {
-      const payload = {
-        departmentId: data.departmentId,
-        date: data.date.toISOString(),
-        startTime: data.useTimeRange ? data.startTime : null,
-        endTime: data.useTimeRange ? data.endTime : null,
-        totalHours: data.useTimeRange ? calculateHoursFromTimeRange(data.startTime!, data.endTime!) : data.totalHours,
-        notes: data.notes || null,
-      };
-      return apiRequest("POST", "/api/submissions", payload);
-    },
-    onSuccess: () => {
-      toast({
-        title: "Success",
-        description: "Your hours submission has been sent for approval.",
+      const formData = new FormData();
+
+      formData.append("departmentId", data.departmentId);
+      formData.append("date", data.date.toISOString());
+      formData.append(
+        "totalHours",
+        data.useTimeRange
+          ? calculateHoursFromTimeRange(
+              data.startTime!,
+              data.endTime!
+            ).toString()
+          : data.totalHours.toString()
+      );
+
+      if (data.startTime) formData.append("startTime", data.startTime);
+      if (data.endTime) formData.append("endTime", data.endTime);
+      if (data.notes) formData.append("notes", data.notes);
+
+      if (data.files) {
+        data.files.forEach((file) => {
+          formData.append("files", file);
+        });
+      }
+
+      const response = await fetch("/api/submissions", {
+        method: "POST",
+        body: formData,
+        credentials: "include",
       });
-      queryClient.invalidateQueries({ queryKey: ["/api/submissions"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/dashboard/stats"] });
-      navigate("/records");
+
+      if (!response.ok) {
+        if (response.status === 401) {
+          throw new Error("unauthorized");
+        }
+        throw new Error("submission_failed");
+      }
+
+      return response;
+    },
+    onSuccess: (response) => {
+      if (response.status === 201) {
+        toast({
+          title: "Success",
+          description: "Your hours submission has been sent for approval.",
+        });
+        queryClient.invalidateQueries({ queryKey: ["/api/submissions"] });
+        queryClient.invalidateQueries({ queryKey: ["/api/dashboard/stats"] });
+        navigate("/records");
+      }
     },
     onError: (error: Error) => {
-      if (isUnauthorizedError(error)) {
+      if (error.message === "unauthorized" || isUnauthorizedError(error)) {
         toast({
           title: "Unauthorized",
           description: "Logging in again...",
           variant: "destructive",
         });
-        setTimeout(() => { window.location.href = "/api/login"; }, 500);
+        setTimeout(() => {
+          window.location.href = "/api/login";
+        }, 500);
         return;
       }
       toast({
@@ -119,7 +231,7 @@ export default function SubmitHours() {
       });
     },
   });
-
+  
   const onSubmit = (data: FormData) => {
     submitMutation.mutate(data);
   };
@@ -142,7 +254,13 @@ export default function SubmitHours() {
 
   return (
     <div className="max-w-3xl mx-auto space-y-6">
-      <Button variant="ghost" size="sm" className="gap-2" onClick={() => navigate("/dashboard")} data-testid="button-back">
+      <Button
+        variant="ghost"
+        size="sm"
+        className="gap-2"
+        onClick={() => navigate("/dashboard")}
+        data-testid="button-back"
+      >
         <ArrowLeft className="h-4 w-4" />
         Back to Dashboard
       </Button>
@@ -153,13 +271,16 @@ export default function SubmitHours() {
             <CardHeader>
               <CardTitle>Submit Overtime Hours</CardTitle>
               <CardDescription>
-                Enter your overtime or extra hours for approval. 
-                All submissions will be reviewed by your department approver.
+                Enter your overtime or extra hours for approval. All submissions
+                will be reviewed by your department approver.
               </CardDescription>
             </CardHeader>
             <CardContent>
               <Form {...form}>
-                <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+                <form
+                  onSubmit={form.handleSubmit(onSubmit)}
+                  className="space-y-6"
+                >
                   <div className="grid gap-6 md:grid-cols-2">
                     <FormField
                       control={form.control}
@@ -167,7 +288,10 @@ export default function SubmitHours() {
                       render={({ field }) => (
                         <FormItem>
                           <FormLabel>Department</FormLabel>
-                          <Select onValueChange={field.onChange} defaultValue={field.value}>
+                          <Select
+                            onValueChange={field.onChange}
+                            defaultValue={field.value}
+                          >
                             <FormControl>
                               <SelectTrigger data-testid="select-department">
                                 <SelectValue placeholder="Select department" />
@@ -201,11 +325,16 @@ export default function SubmitHours() {
                                   data-testid="button-date-picker"
                                 >
                                   <CalendarIcon className="mr-2 h-4 w-4" />
-                                  {field.value ? format(field.value, "PPP") : "Pick a date"}
+                                  {field.value
+                                    ? format(field.value, "PPP")
+                                    : "Pick a date"}
                                 </Button>
                               </FormControl>
                             </PopoverTrigger>
-                            <PopoverContent className="w-auto p-0" align="start">
+                            <PopoverContent
+                              className="w-auto p-0"
+                              align="start"
+                            >
                               <Calendar
                                 mode="single"
                                 selected={field.value}
@@ -231,7 +360,10 @@ export default function SubmitHours() {
                       }}
                       data-testid="switch-time-range"
                     />
-                    <Label htmlFor="time-range-toggle" className="cursor-pointer">
+                    <Label
+                      htmlFor="time-range-toggle"
+                      className="cursor-pointer"
+                    >
                       Use time range instead of total hours
                     </Label>
                   </div>
@@ -245,7 +377,11 @@ export default function SubmitHours() {
                           <FormItem>
                             <FormLabel>Start Time</FormLabel>
                             <FormControl>
-                              <Input type="time" {...field} data-testid="input-start-time" />
+                              <Input
+                                type="time"
+                                {...field}
+                                data-testid="input-start-time"
+                              />
                             </FormControl>
                             <FormMessage />
                           </FormItem>
@@ -258,7 +394,11 @@ export default function SubmitHours() {
                           <FormItem>
                             <FormLabel>End Time</FormLabel>
                             <FormControl>
-                              <Input type="time" {...field} data-testid="input-end-time" />
+                              <Input
+                                type="time"
+                                {...field}
+                                data-testid="input-end-time"
+                              />
                             </FormControl>
                             <FormMessage />
                           </FormItem>
@@ -293,6 +433,31 @@ export default function SubmitHours() {
 
                   <FormField
                     control={form.control}
+                    name="files"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Attachments (Optional)</FormLabel>
+                        <FormControl>
+                          <Input
+                            type="file"
+                            multiple
+                            onChange={(e) => {
+                              const files = Array.from(e.target.files || []);
+                              field.onChange(files);
+                            }}
+                            data-testid="input-files"
+                          />
+                        </FormControl>
+                        <FormDescription>
+                          Upload supporting documents (images, PDFs, etc.)
+                        </FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
                     name="notes"
                     render={({ field }) => (
                       <FormItem>
@@ -324,7 +489,9 @@ export default function SubmitHours() {
                       disabled={submitMutation.isPending}
                       data-testid="button-submit"
                     >
-                      {submitMutation.isPending ? "Submitting..." : "Submit for Approval"}
+                      {submitMutation.isPending
+                        ? "Submitting..."
+                        : "Submit for Approval"}
                     </Button>
                   </div>
                 </form>
@@ -343,7 +510,10 @@ export default function SubmitHours() {
             </CardHeader>
             <CardContent>
               <div className="text-center py-6">
-                <div className="text-5xl font-bold font-mono text-primary" data-testid="text-calculated-hours">
+                <div
+                  className="text-5xl font-bold font-mono text-primary"
+                  data-testid="text-calculated-hours"
+                >
                   {calculatedHours}
                 </div>
                 <div className="text-muted-foreground mt-2">
