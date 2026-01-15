@@ -1,16 +1,51 @@
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Calendar } from "@/components/ui/calendar";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { StatusBadge } from "@/components/status-badge";
 import { EmptyState } from "@/components/empty-state";
 import { TableSkeleton } from "@/components/loading-skeleton";
+import { useToast } from "@/hooks/use-toast";
+import { apiRequest } from "@/lib/queryClient";
 import { format } from "date-fns";
-import { CalendarIcon, FileText, Search, Download } from "lucide-react";
+import {
+  CalendarIcon,
+  FileText,
+  Search,
+  Download,
+  Edit,
+  X,
+  RotateCcw,
+} from "lucide-react";
 import type { HoursSubmission, Department } from "@shared/schema";
 
 interface SubmissionWithDepartment extends HoursSubmission {
@@ -18,24 +53,140 @@ interface SubmissionWithDepartment extends HoursSubmission {
 }
 
 type StatusFilter = "all" | "pending" | "approved" | "rejected";
+type ActionType = "edit" | "cancel" | null;
 
 export default function Records() {
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [departmentFilter, setDepartmentFilter] = useState<string>("all");
   const [dateFrom, setDateFrom] = useState<Date | undefined>();
   const [dateTo, setDateTo] = useState<Date | undefined>();
-
-  const { data: submissions, isLoading } = useQuery<SubmissionWithDepartment[]>({
-    queryKey: ["/api/submissions"],
+  const [selectedSubmission, setSelectedSubmission] =
+    useState<SubmissionWithDepartment | null>(null);
+  const [actionType, setActionType] = useState<ActionType>(null);
+  const [editData, setEditData] = useState({
+    totalHours: 0,
+    notes: "",
+    date: "",
+    startTime: "",
+    endTime: "",
   });
+  const [cancelReason, setCancelReason] = useState("");
+
+  const { data: submissions, isLoading } = useQuery<SubmissionWithDepartment[]>(
+    {
+      queryKey: ["/api/submissions"],
+    }
+  );
 
   const { data: departments } = useQuery<Department[]>({
     queryKey: ["/api/departments"],
   });
 
+  // Edit Mutation
+  const editMutation = useMutation({
+    mutationFn: async ({ id, data }: { id: string; data: any }) => {
+      return apiRequest("PATCH", `/api/submissions/${id}`, data);
+    },
+    onSuccess: () => {
+      toast({
+        title: "Success",
+        description: "Submission updated successfully.",
+      });
+      queryClient.invalidateQueries({ queryKey: ["/api/submissions"] });
+      setSelectedSubmission(null);
+      setActionType(null);
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to update submission.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Cancel Mutation
+  const cancelMutation = useMutation({
+    mutationFn: async ({ id, reason }: { id: string; reason: string }) => {
+      return apiRequest("POST", `/api/submissions/${id}/cancel`, { reason });
+    },
+    onSuccess: () => {
+      toast({
+        title: "Success",
+        description: "Submission cancelled successfully.",
+      });
+      queryClient.invalidateQueries({ queryKey: ["/api/submissions"] });
+      setSelectedSubmission(null);
+      setActionType(null);
+      setCancelReason("");
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to cancel submission.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const handleAction = (
+    submission: SubmissionWithDepartment,
+    action: "edit" | "cancel"
+  ) => {
+    setSelectedSubmission(submission);
+    setActionType(action);
+    if (action === "edit") {
+      setEditData({
+        totalHours: submission.totalHours,
+        notes: submission.notes || "",
+        date: format(new Date(submission.date), "yyyy-MM-dd"),
+        startTime: submission.startTime || "",
+        endTime: submission.endTime || "",
+      });
+    }
+    setCancelReason("");
+  };
+
+  const confirmAction = () => {
+    if (!selectedSubmission) return;
+
+    if (actionType === "edit") {
+      editMutation.mutate({
+        id: selectedSubmission.id,
+        data: {
+          totalHours: editData.totalHours,
+          notes: editData.notes,
+          date: editData.date,
+          startTime: editData.startTime,
+          endTime: editData.endTime,
+        },
+      });
+    } else if (actionType === "cancel") {
+      if (cancelReason.trim().length < 5) {
+        toast({
+          title: "Reason Required",
+          description: "Cancellation reason must be at least 5 characters.",
+          variant: "destructive",
+        });
+        return;
+      }
+      cancelMutation.mutate({
+        id: selectedSubmission.id,
+        reason: cancelReason.trim(),
+      });
+    }
+  };
+
   const filteredSubmissions = submissions?.filter((submission) => {
-    if (statusFilter !== "all" && submission.status !== statusFilter) return false;
-    if (departmentFilter !== "all" && submission.departmentId !== departmentFilter) return false;
+    if (statusFilter !== "all" && submission.status !== statusFilter)
+      return false;
+    if (
+      departmentFilter !== "all" &&
+      submission.departmentId !== departmentFilter
+    )
+      return false;
     if (dateFrom && new Date(submission.date) < dateFrom) return false;
     if (dateTo && new Date(submission.date) > dateTo) return false;
     return true;
@@ -44,7 +195,14 @@ export default function Records() {
   const handleExportCSV = () => {
     if (!filteredSubmissions || filteredSubmissions.length === 0) return;
 
-    const headers = ["Date", "Department", "Hours", "Status", "Notes", "Submitted"];
+    const headers = [
+      "Date",
+      "Department",
+      "Hours",
+      "Status",
+      "Notes",
+      "Submitted",
+    ];
     const rows = filteredSubmissions.map((s) => [
       format(new Date(s.date), "yyyy-MM-dd"),
       s.department?.name || "N/A",
@@ -54,7 +212,9 @@ export default function Records() {
       format(new Date(s.createdAt!), "yyyy-MM-dd HH:mm"),
     ]);
 
-    const csv = [headers, ...rows].map((row) => row.map((cell) => `"${cell}"`).join(",")).join("\n");
+    const csv = [headers, ...rows]
+      .map((row) => row.map((cell) => `"${cell}"`).join(","))
+      .join("\\n");
     const blob = new Blob([csv], { type: "text/csv" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
@@ -76,7 +236,9 @@ export default function Records() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold">My Records</h1>
-          <p className="text-muted-foreground">View and filter your overtime hour submissions</p>
+          <p className="text-muted-foreground">
+            View and manage your overtime hour submissions
+          </p>
         </div>
         <Button
           variant="outline"
@@ -98,7 +260,10 @@ export default function Records() {
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             <div className="space-y-2">
               <label className="text-sm font-medium">Status</label>
-              <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as StatusFilter)}>
+              <Select
+                value={statusFilter}
+                onValueChange={(v) => setStatusFilter(v as StatusFilter)}
+              >
                 <SelectTrigger data-testid="select-status-filter">
                   <SelectValue />
                 </SelectTrigger>
@@ -113,7 +278,10 @@ export default function Records() {
 
             <div className="space-y-2">
               <label className="text-sm font-medium">Department</label>
-              <Select value={departmentFilter} onValueChange={setDepartmentFilter}>
+              <Select
+                value={departmentFilter}
+                onValueChange={setDepartmentFilter}
+              >
                 <SelectTrigger data-testid="select-department-filter">
                   <SelectValue />
                 </SelectTrigger>
@@ -178,7 +346,12 @@ export default function Records() {
           </div>
 
           <div className="mt-4 flex justify-end">
-            <Button variant="ghost" size="sm" onClick={clearFilters} data-testid="button-clear-filters">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={clearFilters}
+              data-testid="button-clear-filters"
+            >
               Clear Filters
             </Button>
           </div>
@@ -190,29 +363,50 @@ export default function Records() {
           <CardTitle>Submission History</CardTitle>
           <CardDescription>
             {filteredSubmissions
-              ? `Showing ${filteredSubmissions.length} record${filteredSubmissions.length !== 1 ? "s" : ""}`
+              ? `Showing ${filteredSubmissions.length} record${
+                  filteredSubmissions.length !== 1 ? "s" : ""
+                }`
               : "Loading..."}
           </CardDescription>
         </CardHeader>
         <CardContent>
           {isLoading ? (
-            <TableSkeleton rows={10} columns={6} />
+            <TableSkeleton rows={10} columns={7} />
           ) : filteredSubmissions && filteredSubmissions.length > 0 ? (
             <div className="overflow-x-auto">
               <table className="w-full">
                 <thead>
                   <tr className="border-b text-left">
-                    <th className="py-3 px-4 text-sm font-medium text-muted-foreground uppercase tracking-wider">Date</th>
-                    <th className="py-3 px-4 text-sm font-medium text-muted-foreground uppercase tracking-wider">Department</th>
-                    <th className="py-3 px-4 text-sm font-medium text-muted-foreground uppercase tracking-wider">Time</th>
-                    <th className="py-3 px-4 text-sm font-medium text-muted-foreground uppercase tracking-wider">Hours</th>
-                    <th className="py-3 px-4 text-sm font-medium text-muted-foreground uppercase tracking-wider">Status</th>
-                    <th className="py-3 px-4 text-sm font-medium text-muted-foreground uppercase tracking-wider">Notes</th>
+                    <th className="py-3 px-4 text-sm font-medium text-muted-foreground uppercase tracking-wider">
+                      Date
+                    </th>
+                    <th className="py-3 px-4 text-sm font-medium text-muted-foreground uppercase tracking-wider">
+                      Department
+                    </th>
+                    <th className="py-3 px-4 text-sm font-medium text-muted-foreground uppercase tracking-wider">
+                      Time
+                    </th>
+                    <th className="py-3 px-4 text-sm font-medium text-muted-foreground uppercase tracking-wider">
+                      Hours
+                    </th>
+                    <th className="py-3 px-4 text-sm font-medium text-muted-foreground uppercase tracking-wider">
+                      Status
+                    </th>
+                    <th className="py-3 px-4 text-sm font-medium text-muted-foreground uppercase tracking-wider">
+                      Notes
+                    </th>
+                    <th className="py-3 px-4 text-sm font-medium text-muted-foreground uppercase tracking-wider text-right">
+                      Actions
+                    </th>
                   </tr>
                 </thead>
                 <tbody>
                   {filteredSubmissions.map((submission) => (
-                    <tr key={submission.id} className="border-b last:border-0 hover-elevate" data-testid={`row-record-${submission.id}`}>
+                    <tr
+                      key={submission.id}
+                      className="border-b last:border-0 hover-elevate"
+                      data-testid={`row-record-${submission.id}`}
+                    >
                       <td className="py-4 px-4 font-mono text-sm">
                         {format(new Date(submission.date), "MMM dd, yyyy")}
                       </td>
@@ -233,6 +427,44 @@ export default function Records() {
                       <td className="py-4 px-4 text-sm text-muted-foreground max-w-xs truncate">
                         {submission.notes || "-"}
                       </td>
+                      <td className="py-4 px-4">
+                        <div className="flex justify-end gap-2">
+                          {submission.status === "pending" &&
+                            !submission.isCancelled && (
+                              <>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="gap-1.5"
+                                  onClick={() =>
+                                    handleAction(submission, "edit")
+                                  }
+                                  data-testid={`button-edit-${submission.id}`}
+                                >
+                                  <Edit className="h-4 w-4" />
+                                  Edit
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="gap-1.5 text-red-600 border-red-200 hover:bg-red-50"
+                                  onClick={() =>
+                                    handleAction(submission, "cancel")
+                                  }
+                                  data-testid={`button-cancel-${submission.id}`}
+                                >
+                                  <X className="h-4 w-4" />
+                                  Cancel
+                                </Button>
+                              </>
+                            )}
+                          {submission.isCancelled && (
+                            <span className="text-sm text-muted-foreground">
+                              Cancelled
+                            </span>
+                          )}
+                        </div>
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -251,6 +483,141 @@ export default function Records() {
           )}
         </CardContent>
       </Card>
+
+      {/* Edit Dialog */}
+      <Dialog
+        open={actionType === "edit"}
+        onOpenChange={() => setActionType(null)}
+      >
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Edit Submission</DialogTitle>
+            <DialogDescription>
+              Update the details of your overtime submission.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Total Hours</label>
+              <Input
+                type="number"
+                step="0.5"
+                value={editData.totalHours}
+                onChange={(e) =>
+                  setEditData({
+                    ...editData,
+                    totalHours: parseFloat(e.target.value),
+                  })
+                }
+              />
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Date</label>
+              <Input
+                type="date"
+                value={editData.date}
+                onChange={(e) =>
+                  setEditData({ ...editData, date: e.target.value })
+                }
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Start Time</label>
+                <Input
+                  type="time"
+                  value={editData.startTime}
+                  onChange={(e) =>
+                    setEditData({ ...editData, startTime: e.target.value })
+                  }
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium">End Time</label>
+                <Input
+                  type="time"
+                  value={editData.endTime}
+                  onChange={(e) =>
+                    setEditData({ ...editData, endTime: e.target.value })
+                  }
+                />
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Notes</label>
+              <Textarea
+                value={editData.notes}
+                onChange={(e) =>
+                  setEditData({ ...editData, notes: e.target.value })
+                }
+                placeholder="Add any additional notes..."
+                rows={3}
+              />
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setActionType(null)}>
+              Cancel
+            </Button>
+            <Button onClick={confirmAction} disabled={editMutation.isPending}>
+              {editMutation.isPending ? "Saving..." : "Save Changes"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Cancel Dialog */}
+      <Dialog
+        open={actionType === "cancel"}
+        onOpenChange={() => setActionType(null)}
+      >
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Cancel Submission</DialogTitle>
+            <DialogDescription>
+              This will mark the submission as cancelled. Please provide a
+              reason.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <label className="text-sm font-medium">
+                Cancellation Reason (Required)
+              </label>
+              <Textarea
+                value={cancelReason}
+                onChange={(e) => setCancelReason(e.target.value)}
+                placeholder="Please provide a reason for cancellation (minimum 5 characters)..."
+                rows={4}
+              />
+              <p className="text-xs text-muted-foreground">
+                {cancelReason.length}/5 characters (minimum required)
+              </p>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setActionType(null)}>
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={confirmAction}
+              disabled={cancelMutation.isPending}
+            >
+              {cancelMutation.isPending
+                ? "Cancelling..."
+                : "Confirm Cancellation"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

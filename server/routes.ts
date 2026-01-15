@@ -2,8 +2,13 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { isAuthenticated } from "./auth";
-import { insertDepartmentSchema, insertHoursSubmissionSchema } from "@shared/schema";
+import {
+  insertDepartmentSchema,
+  insertHoursSubmissionSchema,
+  type InsertHoursSubmission,
+} from "@shared/schema";
 import { z } from "zod";
+import App from "@/App";
 
 export async function registerRoutes(
   httpServer: Server,
@@ -16,11 +21,10 @@ export async function registerRoutes(
     return req.user?.id;
   };
 
-
   // Helper to check if user has role
   const hasRole = async (userId: string, role: string): Promise<boolean> => {
     const roles = await storage.getUserRoles(userId);
-    return roles.some(r => r.role === role);
+    return roles.some((r) => r.role === role);
   };
 
   // Helper to check if user is admin
@@ -30,7 +34,11 @@ export async function registerRoutes(
 
   // Helper to check if user is approver
   const isApprover = async (userId: string): Promise<boolean> => {
-    return hasRole(userId, "approver") || hasRole(userId, "admin") || hasRole(userId, "hr");
+    return (
+      hasRole(userId, "approver") ||
+      hasRole(userId, "admin") ||
+      hasRole(userId, "hr")
+    );
   };
 
   // Helper to check if user is HR
@@ -46,13 +54,13 @@ export async function registerRoutes(
     try {
       const userId = getUserId(req);
       let roles = await storage.getUserRoles(userId);
-      
+
       // If no roles, assign default employee role
       if (roles.length === 0) {
         await storage.addUserRole({ userId, role: "employee" });
         roles = await storage.getUserRoles(userId);
       }
-      
+
       res.json(roles);
     } catch (error) {
       console.error("Error fetching user roles:", error);
@@ -77,13 +85,13 @@ export async function registerRoutes(
   app.post("/api/departments", isAuthenticated, async (req, res) => {
     try {
       const userId = getUserId(req);
-      if (!await isAdmin(userId)) {
+      if (!(await isAdmin(userId))) {
         return res.status(403).json({ message: "Admin access required" });
       }
 
       const data = insertDepartmentSchema.parse(req.body);
       const department = await storage.createDepartment(data);
-      
+
       // Create audit log
       await storage.createAuditLog({
         userId,
@@ -92,12 +100,14 @@ export async function registerRoutes(
         entityId: department.id,
         newValue: department.name,
       });
-      
+
       res.status(201).json(department);
     } catch (error) {
       console.error("Error creating department:", error);
       if (error instanceof z.ZodError) {
-        return res.status(400).json({ message: "Invalid data", errors: error.errors });
+        return res
+          .status(400)
+          .json({ message: "Invalid data", errors: error.errors });
       }
       res.status(500).json({ message: "Failed to create department" });
     }
@@ -106,7 +116,7 @@ export async function registerRoutes(
   app.put("/api/departments/:id", isAuthenticated, async (req, res) => {
     try {
       const userId = getUserId(req);
-      if (!await isAdmin(userId)) {
+      if (!(await isAdmin(userId))) {
         return res.status(403).json({ message: "Admin access required" });
       }
 
@@ -118,7 +128,7 @@ export async function registerRoutes(
 
       const data = insertDepartmentSchema.partial().parse(req.body);
       const department = await storage.updateDepartment(id, data);
-      
+
       // Create audit log
       await storage.createAuditLog({
         userId,
@@ -128,7 +138,7 @@ export async function registerRoutes(
         oldValue: existing.name,
         newValue: data.name || existing.name,
       });
-      
+
       res.json(department);
     } catch (error) {
       console.error("Error updating department:", error);
@@ -139,7 +149,7 @@ export async function registerRoutes(
   app.delete("/api/departments/:id", isAuthenticated, async (req, res) => {
     try {
       const userId = getUserId(req);
-      if (!await isAdmin(userId)) {
+      if (!(await isAdmin(userId))) {
         return res.status(403).json({ message: "Admin access required" });
       }
 
@@ -150,7 +160,7 @@ export async function registerRoutes(
       }
 
       await storage.deleteDepartment(id);
-      
+
       // Create audit log
       await storage.createAuditLog({
         userId,
@@ -159,7 +169,7 @@ export async function registerRoutes(
         entityId: id,
         oldValue: existing.name,
       });
-      
+
       res.json({ success: true });
     } catch (error) {
       console.error("Error deleting department:", error);
@@ -171,168 +181,253 @@ export async function registerRoutes(
   // DEPARTMENT APPROVERS
   // ===================
 
-  app.get("/api/departments/:id/approvers", isAuthenticated, async (req, res) => {
-    try {
-      const userId = getUserId(req);
-      if (!await isAdmin(userId)) {
-        return res.status(403).json({ message: "Admin access required" });
-      }
+  app.get(
+    "/api/departments/:id/approvers",
+    isAuthenticated,
+    async (req, res) => {
+      try {
+        const userId = getUserId(req);
+        if (!(await isAdmin(userId))) {
+          return res.status(403).json({ message: "Admin access required" });
+        }
 
-      const { id } = req.params;
-      const approvers = await storage.getDepartmentApproversWithDetails(id);
-      res.json(approvers);
-    } catch (error) {
-      console.error("Error fetching department approvers:", error);
-      res.status(500).json({ message: "Failed to fetch department approvers" });
+        const { id } = req.params;
+        const approvers = await storage.getDepartmentApproversWithDetails(id);
+        res.json(approvers);
+      } catch (error) {
+        console.error("Error fetching department approvers:", error);
+        res
+          .status(500)
+          .json({ message: "Failed to fetch department approvers" });
+      }
     }
-  });
+  );
 
-  app.post("/api/departments/:id/approvers", isAuthenticated, async (req, res) => {
-    try {
-      const userId = getUserId(req);
-      if (!await isAdmin(userId)) {
-        return res.status(403).json({ message: "Admin access required" });
-      }
+  app.post(
+    "/api/departments/:id/approvers",
+    isAuthenticated,
+    async (req, res) => {
+      try {
+        const userId = getUserId(req);
+        if (!(await isAdmin(userId))) {
+          return res.status(403).json({ message: "Admin access required" });
+        }
 
-      const { id } = req.params;
-      const { userId: approverUserId } = req.body;
-      
-      if (!approverUserId) {
-        return res.status(400).json({ message: "userId is required" });
-      }
+        const { id } = req.params;
+        const { userId: approverUserId } = req.body;
 
-      await storage.addDepartmentApprover({ userId: approverUserId, departmentId: id });
-      
-      await storage.createAuditLog({
-        userId,
-        action: "approver_added",
-        entityType: "department",
-        entityId: id,
-        newValue: approverUserId,
-      });
-      
-      // Return enriched data with user details
-      const addedApprover = await storage.getDepartmentApproverWithDetails(approverUserId, id);
-      if (!addedApprover) {
-        return res.status(500).json({ message: "Failed to retrieve added approver" });
+        if (!approverUserId) {
+          return res.status(400).json({ message: "userId is required" });
+        }
+
+        await storage.addDepartmentApprover({
+          userId: approverUserId,
+          departmentId: id,
+        });
+
+        await storage.createAuditLog({
+          userId,
+          action: "approver_added",
+          entityType: "department",
+          entityId: id,
+          newValue: approverUserId,
+        });
+
+        // Return enriched data with user details
+        const addedApprover = await storage.getDepartmentApproverWithDetails(
+          approverUserId,
+          id
+        );
+        if (!addedApprover) {
+          return res
+            .status(500)
+            .json({ message: "Failed to retrieve added approver" });
+        }
+        res.status(201).json(addedApprover);
+      } catch (error) {
+        console.error("Error adding department approver:", error);
+        res.status(500).json({ message: "Failed to add department approver" });
       }
-      res.status(201).json(addedApprover);
-    } catch (error) {
-      console.error("Error adding department approver:", error);
-      res.status(500).json({ message: "Failed to add department approver" });
     }
-  });
+  );
 
-  app.delete("/api/departments/:id/approvers/:approverUserId", isAuthenticated, async (req, res) => {
-    try {
-      const userId = getUserId(req);
-      if (!await isAdmin(userId)) {
-        return res.status(403).json({ message: "Admin access required" });
+  app.delete(
+    "/api/departments/:id/approvers/:approverUserId",
+    isAuthenticated,
+    async (req, res) => {
+      try {
+        const userId = getUserId(req);
+        if (!(await isAdmin(userId))) {
+          return res.status(403).json({ message: "Admin access required" });
+        }
+
+        const { id, approverUserId } = req.params;
+        await storage.removeDepartmentApprover(approverUserId, id);
+
+        await storage.createAuditLog({
+          userId,
+          action: "approver_removed",
+          entityType: "department",
+          entityId: id,
+          oldValue: approverUserId,
+        });
+
+        res.json({
+          success: true,
+          removedUserId: approverUserId,
+          departmentId: id,
+        });
+      } catch (error) {
+        console.error("Error removing department approver:", error);
+        res
+          .status(500)
+          .json({ message: "Failed to remove department approver" });
       }
-
-      const { id, approverUserId } = req.params;
-      await storage.removeDepartmentApprover(approverUserId, id);
-      
-      await storage.createAuditLog({
-        userId,
-        action: "approver_removed",
-        entityType: "department",
-        entityId: id,
-        oldValue: approverUserId,
-      });
-      
-      res.json({ success: true, removedUserId: approverUserId, departmentId: id });
-    } catch (error) {
-      console.error("Error removing department approver:", error);
-      res.status(500).json({ message: "Failed to remove department approver" });
     }
-  });
+  );
 
   // ===================
   // EMPLOYEE DEPARTMENT ASSIGNMENTS
   // ===================
 
-  app.get("/api/departments/:id/employees", isAuthenticated, async (req, res) => {
-    try {
-      const userId = getUserId(req);
-      if (!await isAdmin(userId)) {
-        return res.status(403).json({ message: "Admin access required" });
-      }
+  app.get(
+    "/api/departments/:id/employees",
+    isAuthenticated,
+    async (req, res) => {
+      try {
+        const userId = getUserId(req);
+        if (!(await isAdmin(userId))) {
+          return res.status(403).json({ message: "Admin access required" });
+        }
 
-      const { id } = req.params;
-      const employees = await storage.getDepartmentEmployeesWithDetails(id);
-      res.json(employees);
-    } catch (error) {
-      console.error("Error fetching department employees:", error);
-      res.status(500).json({ message: "Failed to fetch department employees" });
+        const { id } = req.params;
+        const employees = await storage.getDepartmentEmployeesWithDetails(id);
+        res.json(employees);
+      } catch (error) {
+        console.error("Error fetching department employees:", error);
+        res
+          .status(500)
+          .json({ message: "Failed to fetch department employees" });
+      }
     }
-  });
+  );
 
-  app.post("/api/departments/:id/employees", isAuthenticated, async (req, res) => {
-    try {
-      const userId = getUserId(req);
-      if (!await isAdmin(userId)) {
-        return res.status(403).json({ message: "Admin access required" });
-      }
+  app.post(
+    "/api/departments/:id/employees",
+    isAuthenticated,
+    async (req, res) => {
+      try {
+        const userId = getUserId(req);
+        if (!(await isAdmin(userId))) {
+          return res.status(403).json({ message: "Admin access required" });
+        }
 
-      const { id } = req.params;
-      const { userId: employeeUserId } = req.body;
-      
-      if (!employeeUserId) {
-        return res.status(400).json({ message: "userId is required" });
-      }
+        const { id } = req.params;
+        const { userId: employeeUserId } = req.body;
 
-      await storage.addEmployeeToDepartment({ userId: employeeUserId, departmentId: id });
-      
-      await storage.createAuditLog({
-        userId,
-        action: "employee_added_to_department",
-        entityType: "department",
-        entityId: id,
-        newValue: employeeUserId,
-      });
-      
-      // Return enriched data with user details
-      const addedEmployee = await storage.getDepartmentEmployeeWithDetails(employeeUserId, id);
-      if (!addedEmployee) {
-        return res.status(500).json({ message: "Failed to retrieve added employee" });
+        if (!employeeUserId) {
+          return res.status(400).json({ message: "userId is required" });
+        }
+
+        await storage.addEmployeeToDepartment({
+          userId: employeeUserId,
+          departmentId: id,
+        });
+
+        await storage.createAuditLog({
+          userId,
+          action: "employee_added_to_department",
+          entityType: "department",
+          entityId: id,
+          newValue: employeeUserId,
+        });
+
+        // Return enriched data with user details
+        const addedEmployee = await storage.getDepartmentEmployeeWithDetails(
+          employeeUserId,
+          id
+        );
+        if (!addedEmployee) {
+          return res
+            .status(500)
+            .json({ message: "Failed to retrieve added employee" });
+        }
+        res.status(201).json(addedEmployee);
+      } catch (error) {
+        console.error("Error adding employee to department:", error);
+        res
+          .status(500)
+          .json({ message: "Failed to add employee to department" });
       }
-      res.status(201).json(addedEmployee);
-    } catch (error) {
-      console.error("Error adding employee to department:", error);
-      res.status(500).json({ message: "Failed to add employee to department" });
     }
-  });
+  );
 
-  app.delete("/api/departments/:id/employees/:employeeUserId", isAuthenticated, async (req, res) => {
-    try {
-      const userId = getUserId(req);
-      if (!await isAdmin(userId)) {
-        return res.status(403).json({ message: "Admin access required" });
+  app.delete(
+    "/api/departments/:id/employees/:employeeUserId",
+    isAuthenticated,
+    async (req, res) => {
+      try {
+        const userId = getUserId(req);
+        if (!(await isAdmin(userId))) {
+          return res.status(403).json({ message: "Admin access required" });
+        }
+
+        const { id, employeeUserId } = req.params;
+        await storage.removeEmployeeFromDepartment(employeeUserId, id);
+
+        await storage.createAuditLog({
+          userId,
+          action: "employee_removed_from_department",
+          entityType: "department",
+          entityId: id,
+          oldValue: employeeUserId,
+        });
+
+        res.json({
+          success: true,
+          removedUserId: employeeUserId,
+          departmentId: id,
+        });
+      } catch (error) {
+        console.error("Error removing employee from department:", error);
+        res
+          .status(500)
+          .json({ message: "Failed to remove employee from department" });
       }
-
-      const { id, employeeUserId } = req.params;
-      await storage.removeEmployeeFromDepartment(employeeUserId, id);
-      
-      await storage.createAuditLog({
-        userId,
-        action: "employee_removed_from_department",
-        entityType: "department",
-        entityId: id,
-        oldValue: employeeUserId,
-      });
-      
-      res.json({ success: true, removedUserId: employeeUserId, departmentId: id });
-    } catch (error) {
-      console.error("Error removing employee from department:", error);
-      res.status(500).json({ message: "Failed to remove employee from department" });
     }
-  });
+  );
 
   // ===================
   // HOURS SUBMISSIONS
   // ===================
 
+  // Get all submissions (for admin view)
+  app.get("/api/submissions/all", isAuthenticated, async (req, res) => {
+    console.log("Fetching submissions with params:", req.query);
+    try {
+      const userId = getUserId(req);
+      if (!(await isAdmin(userId))) {
+        return res.status(403).json({ message: "Admin access required" });
+      }
+
+      const page = parseInt(req.query.page as string) || 1;
+      const limit = parseInt(req.query.limit as string) || 10;
+      const search = (req.query.search as string) || '';
+
+      const { submissions, total } = await storage.getAllSubmissionsWithDetails({
+        page,
+        limit,
+        search,
+      });
+
+      res.json({ submissions, total });
+    } catch (error) {
+      console.error("Error fetching all submissions:", error);
+      res.status(500).json({ message: "Failed to fetch submissions" });
+    }
+  });
+
+  // Get user's submissions
   app.get("/api/submissions", isAuthenticated, async (req, res) => {
     try {
       const userId = getUserId(req);
@@ -347,20 +442,22 @@ export async function registerRoutes(
   app.post("/api/submissions", isAuthenticated, async (req, res) => {
     try {
       const userId = getUserId(req);
-      
+
       const data = insertHoursSubmissionSchema.parse({
         ...req.body,
         userId,
         date: new Date(req.body.date),
       });
-      
+
       // Validate hours
       if (data.totalHours < 0.5 || data.totalHours > 24) {
-        return res.status(400).json({ message: "Hours must be between 0.5 and 24" });
+        return res
+          .status(400)
+          .json({ message: "Hours must be between 0.5 and 24" });
       }
-      
+
       const submission = await storage.createSubmission(data);
-      
+
       // Create audit log
       await storage.createAuditLog({
         userId,
@@ -369,12 +466,14 @@ export async function registerRoutes(
         entityId: submission.id,
         newValue: `${data.totalHours} hours`,
       });
-      
+
       res.status(201).json(submission);
     } catch (error) {
       console.error("Error creating submission:", error);
       if (error instanceof z.ZodError) {
-        return res.status(400).json({ message: "Invalid data", errors: error.errors });
+        return res
+          .status(400)
+          .json({ message: "Invalid data", errors: error.errors });
       }
       res.status(500).json({ message: "Failed to create submission" });
     }
@@ -387,12 +486,12 @@ export async function registerRoutes(
   app.get("/api/approvals/pending", isAuthenticated, async (req, res) => {
     try {
       const userId = getUserId(req);
-      
+
       // Trigger auto-escalation check
       await storage.autoEscalateSubmissions();
 
       let approvals: any[] = [];
-      
+
       if (await isAdmin(userId)) {
         const pending = await storage.getAllPendingApprovals();
         const escalated = await storage.getEscalatedApprovals();
@@ -402,9 +501,9 @@ export async function registerRoutes(
       } else if (await isApprover(userId)) {
         approvals = await storage.getPendingApprovals(userId);
       }
-      
+
       // Filter out self-submissions
-      const filtered = approvals.filter(a => a.userId !== userId);
+      const filtered = approvals.filter((a) => a.userId !== userId);
       res.json(filtered);
     } catch (error) {
       console.error("Error fetching pending approvals:", error);
@@ -412,101 +511,562 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/submissions/:id/escalate", isAuthenticated, async (req, res) => {
+  app.post(
+    "/api/submissions/:id/escalate",
+    isAuthenticated,
+    async (req, res) => {
+      try {
+        const userId = getUserId(req);
+        const { id } = req.params;
+        const { reason } = req.body;
+
+        if (!reason) {
+          return res
+            .status(400)
+            .json({ message: "Reason is required for escalation" });
+        }
+
+        const submission = await storage.getSubmission(id);
+        if (!submission) {
+          return res.status(404).json({ message: "Submission not found" });
+        }
+
+        // Check if user is an approver for this department
+        const canEscalate =
+          (await isAdmin(userId)) ||
+          (await storage.isUserApproverForDepartment(
+            userId,
+            submission.departmentId
+          ));
+
+        if (!canEscalate) {
+          return res
+            .status(403)
+            .json({ message: "Not authorized to escalate this submission" });
+        }
+
+        const updated = await storage.escalateSubmission(id, reason);
+
+        await storage.createAuditLog({
+          userId,
+          action: "submission_escalated",
+          entityType: "submission",
+          entityId: id,
+          newValue: reason,
+        });
+
+        res.json(updated);
+      } catch (error) {
+        console.error("Error escalating submission:", error);
+        res.status(500).json({ message: "Failed to escalate submission" });
+      }
+    }
+  );
+
+  app.post(
+    "/api/submissions/:id/approve",
+    isAuthenticated,
+    async (req, res) => {
+      try {
+        const userId = getUserId(req);
+        const { id } = req.params;
+        const { status, comment } = req.body;
+
+        if (!["approved", "rejected"].includes(status)) {
+          return res.status(400).json({ message: "Invalid status" });
+        }
+
+        const submission = await storage.getSubmission(id);
+        if (!submission) {
+          return res.status(404).json({ message: "Submission not found" });
+        }
+
+        // Check if submission is still pending (state guard)
+        if (submission.status !== "pending") {
+          return res
+            .status(409)
+            .json({ message: "Submission has already been processed" });
+        }
+
+        // Self-approval restriction
+        if (submission.userId === userId) {
+          return res
+            .status(403)
+            .json({ message: "Cannot approve your own submission" });
+        }
+
+        // Check if user can approve
+        let canApprove = false;
+        if (submission.status === "escalated") {
+          canApprove = await isHR(userId);
+        } else {
+          canApprove =
+            (await isAdmin(userId)) ||
+            (await storage.isUserApproverForDepartment(
+              userId,
+              submission.departmentId
+            ));
+        }
+
+        if (!canApprove) {
+          return res
+            .status(403)
+            .json({ message: "Not authorized to approve this submission" });
+        }
+
+        const updated = await storage.approveSubmission(
+          id,
+          userId,
+          status,
+          comment
+        );
+
+        // Create audit log
+        await storage.createAuditLog({
+          userId,
+          action:
+            status === "approved"
+              ? "submission_approved"
+              : "submission_rejected",
+          entityType: "submission",
+          entityId: id,
+          newValue: comment || status,
+        });
+
+        res.json(updated);
+      } catch (error) {
+        console.error("Error processing approval:", error);
+        res.status(500).json({ message: "Failed to process approval" });
+      }
+    }
+  );
+
+  // ===================
+  // NEW: SUBMISSION APPROVERS
+  // ===================
+
+  /**
+   * Assign an approver to a specific submission
+   * Permission: Admin or HR only
+   */
+  app.post(
+    "/api/submissions/:id/approvers",
+    isAuthenticated,
+    async (req, res) => {
+      try {
+        const userId = getUserId(req);
+        const { id } = req.params;
+        const { approverUserId, approvalOrder } = req.body;
+
+        // Permission check: Only Admin/HR can assign approvers
+        if (!(await isAdmin(userId)) && !(await isHR(userId))) {
+          return res
+            .status(403)
+            .json({ message: "Admin or HR access required" });
+        }
+
+        if (!approverUserId) {
+          return res
+            .status(400)
+            .json({ message: "approverUserId is required" });
+        }
+
+        // Verify submission exists
+        const submission = await storage.getSubmission(id);
+        if (!submission) {
+          return res.status(404).json({ message: "Submission not found" });
+        }
+
+        // Verify approver has appropriate role
+        const approverRoles = await storage.getUserRoles(approverUserId);
+        const hasApproverRole = approverRoles.some((r) =>
+          ["approver", "hr", "admin"].includes(r.role)
+        );
+
+        if (!hasApproverRole) {
+          return res
+            .status(400)
+            .json({ message: "User must have approver, hr, or admin role" });
+        }
+
+        // Check for duplicate assignment
+        const isAlreadyAssigned = await storage.isUserAssignedApprover(
+          id,
+          approverUserId
+        );
+        if (isAlreadyAssigned) {
+          return res
+            .status(409)
+            .json({ message: "Approver already assigned to this submission" });
+        }
+
+        // Assign approver
+        const assignment = await storage.assignApprover({
+          submissionId: id,
+          approverUserId,
+          assignedBy: userId,
+          approvalOrder: approvalOrder || null,
+        });
+
+        // Create audit log
+        await storage.createAuditLog({
+          userId,
+          action: "approver_assigned",
+          entityType: "submission",
+          entityId: id,
+          newValue: approverUserId,
+        });
+
+        // Get enriched data
+        const approvers = await storage.getSubmissionApprovers(id);
+        const assigned = approvers.find((a) => a.id === assignment.id);
+
+        res.status(201).json(assigned);
+      } catch (error) {
+        console.error("Error assigning approver:", error);
+        res.status(500).json({ message: "Failed to assign approver" });
+      }
+    }
+  );
+
+  /**
+   * Get all assigned approvers for a submission
+   */
+  app.get(
+    "/api/submissions/:id/approvers",
+    isAuthenticated,
+    async (req, res) => {
+      try {
+        const { id } = req.params;
+
+        const approvers = await storage.getSubmissionApprovers(id);
+        res.json(approvers);
+      } catch (error) {
+        console.error("Error fetching submission approvers:", error);
+        res.status(500).json({ message: "Failed to fetch approvers" });
+      }
+    }
+  );
+
+  /**
+   * Remove an assigned approver from a submission
+   * Permission: Admin or HR only
+   */
+  app.delete(
+    "/api/submissions/:id/approvers/:approverUserId",
+    isAuthenticated,
+    async (req, res) => {
+      try {
+        const userId = getUserId(req);
+        const { id, approverUserId } = req.params;
+
+        // Permission check: Only Admin/HR can remove approvers
+        if (!(await isAdmin(userId)) && !(await isHR(userId))) {
+          return res
+            .status(403)
+            .json({ message: "Admin or HR access required" });
+        }
+
+        await storage.removeSubmissionApprover(id, approverUserId);
+
+        // Create audit log
+        await storage.createAuditLog({
+          userId,
+          action: "approver_removed",
+          entityType: "submission",
+          entityId: id,
+          oldValue: approverUserId,
+        });
+
+        res.json({ success: true, removedUserId: approverUserId });
+      } catch (error) {
+        console.error("Error removing approver:", error);
+        res.status(500).json({ message: "Failed to remove approver" });
+      }
+    }
+  );
+
+  // ===================
+  // NEW: ADMIN OVERRIDE
+  // ===================
+
+  /**
+   * Override a submission approval (admin only)
+   * Allows admin to force approve/reject with mandatory reason
+   */
+  app.post(
+    "/api/submissions/:id/override",
+    isAuthenticated,
+    async (req, res) => {
+      try {
+        const userId = getUserId(req);
+        const { id } = req.params;
+        const { status, reason } = req.body;
+
+        // Permission check: Admin only
+        if (!(await isAdmin(userId))) {
+          return res
+            .status(403)
+            .json({ message: "Admin access required for override" });
+        }
+
+        if (!["approved", "rejected"].includes(status)) {
+          return res
+            .status(400)
+            .json({ message: "Status must be 'approved' or 'rejected'" });
+        }
+
+        if (!reason || reason.trim().length < 10) {
+          return res
+            .status(400)
+            .json({
+              message: "Override reason must be at least 10 characters",
+            });
+        }
+
+        const submission = await storage.getSubmission(id);
+        if (!submission) {
+          return res.status(404).json({ message: "Submission not found" });
+        }
+
+        // Perform override
+        const updated = await storage.overrideSubmission(
+          id,
+          userId,
+          status,
+          reason
+        );
+
+        // Create detailed audit log
+        await storage.createAuditLog({
+          userId,
+          action: "submission_overridden",
+          entityType: "submission",
+          entityId: id,
+          oldValue: submission.status,
+          newValue: status,
+          reason,
+        });
+
+        res.json(updated);
+      } catch (error: any) {
+        console.error("Error overriding submission:", error);
+        res
+          .status(500)
+          .json({ message: error.message || "Failed to override submission" });
+      }
+    }
+  );
+
+  // ===================
+  // NEW: EDIT SUBMISSION
+  // ===================
+
+  /**
+   * Edit a submission
+   * Permission: Owner if pending, Admin/HR for any
+   */
+  app.patch("/api/submissions/:id", isAuthenticated, async (req, res) => {
+    try {
+      const userId = getUserId(req);
+      const { id } = req.params;
+      const { totalHours, notes, date, startTime, endTime, departmentId } =
+        req.body;
+
+      const submission = await storage.getSubmission(id);
+      if (!submission) {
+        return res.status(404).json({ message: "Submission not found" });
+      }
+
+      // Check if cancelled
+      if (submission.isCancelled) {
+        return res
+          .status(400)
+          .json({ message: "Cannot edit cancelled submission" });
+      }
+
+      // Permission check
+      const isOwner = submission.userId === userId;
+      const canEditAny = (await isAdmin(userId)) || (await isHR(userId));
+
+      if (!isOwner && !canEditAny) {
+        return res
+          .status(403)
+          .json({ message: "Not authorized to edit this submission" });
+      }
+
+      // If not admin/HR, can only edit if pending
+      if (isOwner && !canEditAny && submission.status !== "pending") {
+        return res
+          .status(403)
+          .json({ message: "Can only edit pending submissions" });
+      }
+
+      // Build update data
+      const updateData: Partial<InsertHoursSubmission> = {};
+      if (totalHours !== undefined) updateData.totalHours = totalHours;
+      if (notes !== undefined) updateData.notes = notes;
+      if (date !== undefined) updateData.date = new Date(date);
+      if (startTime !== undefined) updateData.startTime = startTime;
+      if (endTime !== undefined) updateData.endTime = endTime;
+      if (departmentId !== undefined) updateData.departmentId = departmentId;
+
+      // Store old values for audit
+      const oldValues = {
+        totalHours: submission.totalHours,
+        notes: submission.notes,
+        date: submission.date,
+        startTime: submission.startTime,
+        endTime: submission.endTime,
+        departmentId: submission.departmentId,
+      };
+
+      // Update submission
+      const updated = await storage.updateSubmission(id, updateData, userId);
+
+      // Create audit log with detailed changes
+      await storage.createAuditLog({
+        userId,
+        action: "submission_edited",
+        entityType: "submission",
+        entityId: id,
+        oldValue: JSON.stringify(oldValues),
+        newValue: JSON.stringify(updateData),
+      });
+
+      res.json(updated);
+    } catch (error: any) {
+      console.error("Error editing submission:", error);
+      res
+        .status(500)
+        .json({ message: error.message || "Failed to edit submission" });
+    }
+  });
+
+  // ===================
+  // NEW: CANCEL SUBMISSION
+  // ===================
+
+  /**
+   * Cancel a submission (soft delete)
+   * Permission: Owner if pending, Admin/HR for any
+   */
+  app.post("/api/submissions/:id/cancel", isAuthenticated, async (req, res) => {
     try {
       const userId = getUserId(req);
       const { id } = req.params;
       const { reason } = req.body;
-      
-      if (!reason) {
-        return res.status(400).json({ message: "Reason is required for escalation" });
-      }
-      
-      const submission = await storage.getSubmission(id);
-      if (!submission) {
-        return res.status(404).json({ message: "Submission not found" });
-      }
-      
-      // Check if user is an approver for this department
-      const canEscalate = await isAdmin(userId) || 
-        await storage.isUserApproverForDepartment(userId, submission.departmentId);
-      
-      if (!canEscalate) {
-        return res.status(403).json({ message: "Not authorized to escalate this submission" });
-      }
-      
-      const updated = await storage.escalateSubmission(id, reason);
-      
-      await storage.createAuditLog({
-        userId,
-        action: "submission_escalated",
-        entityType: "submission",
-        entityId: id,
-        newValue: reason,
-      });
-      
-      res.json(updated);
-    } catch (error) {
-      console.error("Error escalating submission:", error);
-      res.status(500).json({ message: "Failed to escalate submission" });
-    }
-  });
 
-  app.post("/api/submissions/:id/approve", isAuthenticated, async (req, res) => {
-    try {
-      const userId = getUserId(req);
-      const { id } = req.params;
-      const { status, comment } = req.body;
-      
-      if (!["approved", "rejected"].includes(status)) {
-        return res.status(400).json({ message: "Invalid status" });
+      if (!reason || reason.trim().length < 5) {
+        return res
+          .status(400)
+          .json({
+            message: "Cancellation reason is required (minimum 5 characters)",
+          });
       }
-      
+
       const submission = await storage.getSubmission(id);
       if (!submission) {
         return res.status(404).json({ message: "Submission not found" });
       }
-      
-      // Check if submission is still pending (state guard)
-      if (submission.status !== "pending") {
-        return res.status(409).json({ message: "Submission has already been processed" });
+
+      if (submission.isCancelled) {
+        return res
+          .status(400)
+          .json({ message: "Submission is already cancelled" });
       }
-      
-      // Self-approval restriction
-      if (submission.userId === userId) {
-        return res.status(403).json({ message: "Cannot approve your own submission" });
+
+      // Permission check
+      const isOwner = submission.userId === userId;
+      const canCancelAny = (await isAdmin(userId)) || (await isHR(userId));
+
+      if (!isOwner && !canCancelAny) {
+        return res
+          .status(403)
+          .json({ message: "Not authorized to cancel this submission" });
       }
-      
-      // Check if user can approve
-      let canApprove = false;
-      if (submission.status === "escalated") {
-        canApprove = await isHR(userId);
-      } else {
-        canApprove = await isAdmin(userId) || 
-          await storage.isUserApproverForDepartment(userId, submission.departmentId);
+
+      // If not admin/HR, can only cancel if pending
+      if (isOwner && !canCancelAny && submission.status !== "pending") {
+        return res
+          .status(403)
+          .json({ message: "Can only cancel pending submissions" });
       }
-      
-      if (!canApprove) {
-        return res.status(403).json({ message: "Not authorized to approve this submission" });
-      }
-      
-      const updated = await storage.approveSubmission(id, userId, status, comment);
-      
+
+      // Cancel submission
+      const updated = await storage.cancelSubmission(id, userId, reason);
+
       // Create audit log
       await storage.createAuditLog({
         userId,
-        action: status === "approved" ? "submission_approved" : "submission_rejected",
+        action: "submission_cancelled",
         entityType: "submission",
         entityId: id,
-        newValue: comment || status,
+        oldValue: submission.status,
+        newValue: "cancelled",
+        reason,
       });
-      
+
       res.json(updated);
-    } catch (error) {
-      console.error("Error processing approval:", error);
-      res.status(500).json({ message: "Failed to process approval" });
+    } catch (error: any) {
+      console.error("Error cancelling submission:", error);
+      res
+        .status(500)
+        .json({ message: error.message || "Failed to cancel submission" });
     }
   });
+
+  /**
+   * Un-cancel a submission (admin only)
+   */
+  app.post(
+    "/api/submissions/:id/uncancel",
+    isAuthenticated,
+    async (req, res) => {
+      try {
+        const userId = getUserId(req);
+        const { id } = req.params;
+
+        // Permission check: Admin only
+        if (!(await isAdmin(userId))) {
+          return res
+            .status(403)
+            .json({ message: "Admin access required to uncancel" });
+        }
+
+        const submission = await storage.getSubmission(id);
+        if (!submission) {
+          return res.status(404).json({ message: "Submission not found" });
+        }
+
+        if (!submission.isCancelled) {
+          return res
+            .status(400)
+            .json({ message: "Submission is not cancelled" });
+        }
+
+        // Uncancel submission
+        const updated = await storage.uncancelSubmission(id, userId);
+
+        // Create audit log
+        await storage.createAuditLog({
+          userId,
+          action: "submission_uncancelled",
+          entityType: "submission",
+          entityId: id,
+          oldValue: "cancelled",
+          newValue: submission.status,
+        });
+
+        res.json(updated);
+      } catch (error: any) {
+        console.error("Error uncancelling submission:", error);
+        res
+          .status(500)
+          .json({ message: error.message || "Failed to uncancel submission" });
+      }
+    }
+  );
 
   // ===================
   // DASHBOARD STATS
@@ -530,10 +1090,10 @@ export async function registerRoutes(
   app.get("/api/admin/stats", isAuthenticated, async (req, res) => {
     try {
       const userId = getUserId(req);
-      if (!await isAdmin(userId)) {
+      if (!(await isAdmin(userId))) {
         return res.status(403).json({ message: "Admin access required" });
       }
-      
+
       const stats = await storage.getAdminStats();
       res.json(stats);
     } catch (error) {
@@ -545,10 +1105,10 @@ export async function registerRoutes(
   app.get("/api/admin/recent-activity", isAuthenticated, async (req, res) => {
     try {
       const userId = getUserId(req);
-      if (!await isAdmin(userId)) {
+      if (!(await isAdmin(userId))) {
         return res.status(403).json({ message: "Admin access required" });
       }
-      
+
       const activity = await storage.getRecentSubmissions(10);
       res.json(activity);
     } catch (error) {
@@ -560,10 +1120,10 @@ export async function registerRoutes(
   app.get("/api/admin/users", isAuthenticated, async (req, res) => {
     try {
       const userId = getUserId(req);
-      if (!await isAdmin(userId)) {
+      if (!(await isAdmin(userId))) {
         return res.status(403).json({ message: "Admin access required" });
       }
-      
+
       const users = await storage.getAllUsersWithRoles();
       res.json(users);
     } catch (error) {
@@ -572,48 +1132,57 @@ export async function registerRoutes(
     }
   });
 
-  app.put("/api/admin/users/:userId/roles", isAuthenticated, async (req, res) => {
-    try {
-      const adminId = getUserId(req);
-      if (!await isAdmin(adminId)) {
-        return res.status(403).json({ message: "Admin access required" });
+  app.put(
+    "/api/admin/users/:userId/roles",
+    isAuthenticated,
+    async (req, res) => {
+      try {
+        const adminId = getUserId(req);
+        if (!(await isAdmin(adminId))) {
+          return res.status(403).json({ message: "Admin access required" });
+        }
+
+        const { userId } = req.params;
+        const { roles } = req.body;
+
+        if (!Array.isArray(roles)) {
+          return res.status(400).json({ message: "Roles must be an array" });
+        }
+
+        // Always include employee role
+        const rolesWithEmployee = roles.includes("employee")
+          ? roles
+          : ["employee", ...roles];
+
+        const updatedRoles = await storage.setUserRoles(
+          userId,
+          rolesWithEmployee
+        );
+
+        // Create audit log
+        await storage.createAuditLog({
+          userId: adminId,
+          action: "user_role_updated",
+          entityType: "user",
+          entityId: userId,
+          newValue: rolesWithEmployee.join(", "),
+        });
+
+        res.json(updatedRoles);
+      } catch (error) {
+        console.error("Error updating user roles:", error);
+        res.status(500).json({ message: "Failed to update user roles" });
       }
-      
-      const { userId } = req.params;
-      const { roles } = req.body;
-      
-      if (!Array.isArray(roles)) {
-        return res.status(400).json({ message: "Roles must be an array" });
-      }
-      
-      // Always include employee role
-      const rolesWithEmployee = roles.includes("employee") ? roles : ["employee", ...roles];
-      
-      const updatedRoles = await storage.setUserRoles(userId, rolesWithEmployee);
-      
-      // Create audit log
-      await storage.createAuditLog({
-        userId: adminId,
-        action: "user_role_updated",
-        entityType: "user",
-        entityId: userId,
-        newValue: rolesWithEmployee.join(", "),
-      });
-      
-      res.json(updatedRoles);
-    } catch (error) {
-      console.error("Error updating user roles:", error);
-      res.status(500).json({ message: "Failed to update user roles" });
     }
-  });
+  );
 
   app.get("/api/admin/departments", isAuthenticated, async (req, res) => {
     try {
       const userId = getUserId(req);
-      if (!await isAdmin(userId)) {
+      if (!(await isAdmin(userId))) {
         return res.status(403).json({ message: "Admin access required" });
       }
-      
+
       const departments = await storage.getDepartmentsWithStats();
       res.json(departments);
     } catch (error) {
@@ -625,10 +1194,10 @@ export async function registerRoutes(
   app.get("/api/admin/audit", isAuthenticated, async (req, res) => {
     try {
       const userId = getUserId(req);
-      if (!await isAdmin(userId)) {
+      if (!(await isAdmin(userId))) {
         return res.status(403).json({ message: "Admin access required" });
       }
-      
+
       const logs = await storage.getAuditLogs(200);
       res.json(logs);
     } catch (error) {

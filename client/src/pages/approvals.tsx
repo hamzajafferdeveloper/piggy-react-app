@@ -40,6 +40,7 @@ import {
   Clock,
   User,
   AlertTriangle,
+  ShieldCheck,
 } from "lucide-react";
 import type {
   HoursSubmission,
@@ -59,8 +60,11 @@ export default function Approvals() {
     useState<SubmissionWithDetails | null>(null);
   const [comment, setComment] = useState("");
   const [actionType, setActionType] = useState<
-    "approve" | "reject" | "escalate" | null
+    "approve" | "reject" | "escalate" | "override" | null
   >(null);
+  const [overrideStatus, setOverrideStatus] = useState<"approved" | "rejected">(
+    "approved"
+  );
   const [departmentFilter, setDepartmentFilter] = useState<string>("all");
 
   const { data: pendingApprovals, isLoading } = useQuery<
@@ -147,9 +151,46 @@ export default function Approvals() {
     },
   });
 
+  // NEW: Admin Override Mutation
+  const overrideMutation = useMutation({
+    mutationFn: async ({
+      id,
+      status,
+      reason,
+    }: {
+      id: string;
+      status: "approved" | "rejected";
+      reason: string;
+    }) => {
+      return apiRequest("POST", `/api/submissions/${id}/override`, {
+        status,
+        reason,
+      });
+    },
+    onSuccess: () => {
+      toast({
+        title: "Success",
+        description: "Submission overridden successfully.",
+      });
+      queryClient.invalidateQueries({ queryKey: ["/api/approvals/pending"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/dashboard/stats"] });
+      setSelectedSubmission(null);
+      setComment("");
+      setActionType(null);
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description:
+          error.message || "Failed to override submission. Please try again.",
+        variant: "destructive",
+      });
+    },
+  });
+
   const handleAction = (
     submission: SubmissionWithDetails,
-    action: "approve" | "reject" | "escalate"
+    action: "approve" | "reject" | "escalate" | "override"
   ) => {
     setSelectedSubmission(submission);
     setActionType(action);
@@ -177,7 +218,22 @@ export default function Approvals() {
       return;
     }
 
-    if (actionType === "escalate") {
+    if (actionType === "override" && comment.trim().length < 10) {
+      toast({
+        title: "Reason Required",
+        description: "Override reason must be at least 10 characters.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (actionType === "override") {
+      overrideMutation.mutate({
+        id: selectedSubmission.id,
+        status: overrideStatus,
+        reason: comment.trim(),
+      });
+    } else if (actionType === "escalate") {
       escalateMutation.mutate({
         id: selectedSubmission.id,
         reason: comment.trim(),
@@ -334,15 +390,30 @@ export default function Approvals() {
                         {format(new Date(approval.createdAt!), "MMM dd")}
                       </td>
                       <td className="py-4 px-4">
-                        <div className="flex justify-end gap-2">
+                        <div className="flex justify-end gap-2 flex-wrap">
                           {approval.status === "escalated" ? (
-                            <Badge
-                              variant="outline"
-                              className="bg-orange-50 text-orange-700 border-orange-200 gap-1.5"
-                            >
-                              <AlertTriangle className="h-3.5 w-3.5" />
-                              Escalated
-                            </Badge>
+                            <>
+                              <Badge
+                                variant="outline"
+                                className="bg-orange-50 text-orange-700 border-orange-200 gap-1.5"
+                              >
+                                <AlertTriangle className="h-3.5 w-3.5" />
+                                Escalated
+                              </Badge>
+                              {/* Admin can still override escalated submissions */}
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="gap-1.5 text-purple-600 border-purple-200 hover:bg-purple-50 dark:text-purple-400 dark:border-purple-800 dark:hover:bg-purple-900/30"
+                                onClick={() =>
+                                  handleAction(approval, "override")
+                                }
+                                data-testid={`button-override-${approval.id}`}
+                              >
+                                <ShieldCheck className="h-4 w-4" />
+                                Override
+                              </Button>
+                            </>
                           ) : (
                             <>
                               <Button
@@ -379,6 +450,19 @@ export default function Approvals() {
                                 <AlertTriangle className="h-4 w-4" />
                                 Escalate
                               </Button>
+                              {/* NEW: Admin Override Button */}
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="gap-1.5 text-purple-600 border-purple-200 hover:bg-purple-50 dark:text-purple-400 dark:border-purple-800 dark:hover:bg-purple-900/30"
+                                onClick={() =>
+                                  handleAction(approval, "override")
+                                }
+                                data-testid={`button-override-${approval.id}`}
+                              >
+                                <ShieldCheck className="h-4 w-4" />
+                                Override
+                              </Button>
                             </>
                           )}
                         </div>
@@ -409,6 +493,8 @@ export default function Approvals() {
                 ? "Approve Submission"
                 : actionType === "reject"
                 ? "Reject Submission"
+                : actionType === "override"
+                ? "Admin Override"
                 : "Escalate Submission"}
             </DialogTitle>
             <DialogDescription>
@@ -416,6 +502,8 @@ export default function Approvals() {
                 ? "Confirm approval of this overtime submission."
                 : actionType === "reject"
                 ? "Please provide a reason for rejection."
+                : actionType === "override"
+                ? "Override this submission with admin authority. This action is irreversible and will be audited."
                 : "Escalate this request to HR or Admin for review."}
             </DialogDescription>
           </DialogHeader>
@@ -461,12 +549,36 @@ export default function Approvals() {
                 </div>
               )}
 
+              {actionType === "override" && (
+                <div>
+                  <label className="text-sm font-medium">
+                    Override Decision
+                  </label>
+                  <Select
+                    value={overrideStatus}
+                    onValueChange={(v) =>
+                      setOverrideStatus(v as "approved" | "rejected")
+                    }
+                  >
+                    <SelectTrigger className="mt-2">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="approved">Approve</SelectItem>
+                      <SelectItem value="rejected">Reject</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+
               <div>
                 <label className="text-sm font-medium">
                   {actionType === "approve"
                     ? "Comment (Optional)"
                     : actionType === "reject"
                     ? "Reason for Rejection (Required)"
+                    : actionType === "override"
+                    ? "Override Reason (Required, min 10 chars)"
                     : "Reason for Escalation (Required)"}
                 </label>
                 <Textarea
@@ -477,11 +589,19 @@ export default function Approvals() {
                       ? "Add an optional comment..."
                       : actionType === "reject"
                       ? "Please provide a reason for rejection..."
+                      : actionType === "override"
+                      ? "Provide a detailed reason for this override (minimum 10 characters)..."
                       : "Please provide a reason for escalation..."
                   }
                   className="mt-2"
+                  rows={actionType === "override" ? 4 : 3}
                   data-testid="textarea-approval-comment"
                 />
+                {actionType === "override" && (
+                  <p className="text-xs text-muted-foreground mt-1">
+                    {comment.length}/10 characters (minimum required)
+                  </p>
+                )}
               </div>
             </div>
           )}
@@ -496,16 +616,30 @@ export default function Approvals() {
             </Button>
             <Button
               onClick={confirmAction}
-              disabled={approveMutation.isPending || escalateMutation.isPending}
-              variant={actionType === "approve" ? "default" : "destructive"}
+              disabled={
+                approveMutation.isPending ||
+                escalateMutation.isPending ||
+                overrideMutation.isPending
+              }
+              variant={
+                actionType === "approve"
+                  ? "default"
+                  : actionType === "override"
+                  ? "default"
+                  : "destructive"
+              }
               data-testid="button-confirm-action"
             >
-              {approveMutation.isPending || escalateMutation.isPending
+              {approveMutation.isPending ||
+              escalateMutation.isPending ||
+              overrideMutation.isPending
                 ? "Processing..."
                 : actionType === "approve"
                 ? "Confirm Approval"
                 : actionType === "reject"
                 ? "Confirm Rejection"
+                : actionType === "override"
+                ? "Confirm Override"
                 : "Confirm Escalation"}
             </Button>
           </DialogFooter>

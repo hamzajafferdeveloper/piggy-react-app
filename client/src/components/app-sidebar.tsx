@@ -56,6 +56,7 @@ export function AppSidebar() {
 
   const approverMenuItems = [
     { title: "Pending Approvals", url: "/approvals", icon: CheckSquare },
+    // { title: "All Approvals", url: "/approvals/all", icon: CheckSquare },
   ];
 
   const adminMenuItems = [

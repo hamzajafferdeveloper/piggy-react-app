@@ -20,6 +20,7 @@ import ManageUsers from "@/pages/admin/users";
 import ManageDepartments from "@/pages/admin/departments";
 import AuditLog from "@/pages/admin/audit";
 import { useEffect } from "react";
+import AllApprovals from "./pages/all-approvals";
 
 // Helper to determine primary role
 function getPrimaryRole(roles: string[]): string {
@@ -92,6 +93,7 @@ function AuthenticatedRouter() {
         <Route path="/submit" component={SubmitHours} />
         <Route path="/records" component={Records} />
         <Route path="/approvals" component={Approvals} />
+        <Route path="/approvals/all" component={AllApprovals} />
         <Route path="/admin" component={AdminDashboard} />
         <Route path="/admin/users" component={ManageUsers} />
         <Route path="/admin/departments" component={ManageDepartments} />

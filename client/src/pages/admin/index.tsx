@@ -1,12 +1,25 @@
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "wouter";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { StatCard } from "@/components/stat-card";
 import { StatCardSkeleton, TableSkeleton } from "@/components/loading-skeleton";
 import { StatusBadge } from "@/components/status-badge";
 import { format } from "date-fns";
-import { Users, Building2, Clock, FileText, ArrowRight, BarChart3 } from "lucide-react";
+import {
+  Users,
+  Building2,
+  Clock,
+  FileText,
+  ArrowRight,
+  BarChart3,
+} from "lucide-react";
 import type { HoursSubmission, Department, User } from "@shared/schema";
 
 interface AdminStats {
@@ -26,7 +39,9 @@ export default function AdminDashboard() {
     queryKey: ["/api/admin/stats"],
   });
 
-  const { data: recentActivity, isLoading: activityLoading } = useQuery<SubmissionWithDetails[]>({
+  const { data: recentActivity, isLoading: activityLoading } = useQuery<
+    SubmissionWithDetails[]
+  >({
     queryKey: ["/api/admin/recent-activity"],
   });
 
@@ -83,9 +98,13 @@ export default function AdminDashboard() {
             <CardTitle>Quick Actions</CardTitle>
             <CardDescription>Common administrative tasks</CardDescription>
           </CardHeader>
-          <CardContent className="space-y-3">
+          <CardContent className="space-y-3 flex flex-col  gap-1">
             <Link href="/admin/users">
-              <Button variant="outline" className="w-full justify-between hover-elevate" data-testid="button-manage-users">
+              <Button
+                variant="outline"
+                className="w-full justify-between hover-elevate"
+                data-testid="button-manage-users"
+              >
                 <span className="flex items-center gap-3">
                   <Users className="h-5 w-5 text-primary" />
                   Manage Users & Roles
@@ -94,7 +113,11 @@ export default function AdminDashboard() {
               </Button>
             </Link>
             <Link href="/admin/departments">
-              <Button variant="outline" className="w-full justify-between hover-elevate" data-testid="button-manage-departments">
+              <Button
+                variant="outline"
+                className="w-full justify-between hover-elevate"
+                data-testid="button-manage-departments"
+              >
                 <span className="flex items-center gap-3">
                   <Building2 className="h-5 w-5 text-primary" />
                   Manage Departments
@@ -103,7 +126,11 @@ export default function AdminDashboard() {
               </Button>
             </Link>
             <Link href="/approvals">
-              <Button variant="outline" className="w-full justify-between hover-elevate" data-testid="button-view-approvals">
+              <Button
+                variant="outline"
+                className="w-full justify-between hover-elevate"
+                data-testid="button-view-approvals"
+              >
                 <span className="flex items-center gap-3">
                   <FileText className="h-5 w-5 text-primary" />
                   Review Pending Approvals
@@ -112,7 +139,11 @@ export default function AdminDashboard() {
               </Button>
             </Link>
             <Link href="/admin/audit">
-              <Button variant="outline" className="w-full justify-between hover-elevate" data-testid="button-view-audit">
+              <Button
+                variant="outline"
+                className="w-full justify-between hover-elevate"
+                data-testid="button-view-audit"
+              >
                 <span className="flex items-center gap-3">
                   <BarChart3 className="h-5 w-5 text-primary" />
                   View Audit Log
@@ -148,7 +179,8 @@ export default function AdminDashboard() {
                           : activity.user?.email || "Unknown"}
                       </p>
                       <p className="text-xs text-muted-foreground">
-                        {activity.department?.name} • {activity.totalHours}h • {format(new Date(activity.createdAt!), "MMM dd")}
+                        {activity.department?.name} • {activity.totalHours}h •{" "}
+                        {format(new Date(activity.createdAt!), "MMM dd")}
                       </p>
                     </div>
                     <StatusBadge status={activity.status} />

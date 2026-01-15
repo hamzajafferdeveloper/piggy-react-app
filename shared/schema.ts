@@ -55,6 +55,24 @@ export const hoursSubmissions = mysqlTable("hours_submissions", {
   approverComment: text("approver_comment"),
   escalatedAt: timestamp("escalated_at"),
   escalationReason: text("escalation_reason"),
+  
+  // NEW: Admin Override fields
+  isOverridden: boolean("is_overridden").default(false), // Indicates if this was overridden by admin
+  overriddenBy: varchar("overridden_by", { length: 36 }), // Admin who performed override
+  overriddenAt: timestamp("overridden_at"), // When override occurred
+  overrideReason: text("override_reason"), // Mandatory reason for override
+  
+  // NEW: Cancellation fields
+  isCancelled: boolean("is_cancelled").default(false), // Soft delete flag
+  cancelledBy: varchar("cancelled_by", { length: 36 }), // Who cancelled
+  cancelledAt: timestamp("cancelled_at"), // When cancelled
+  cancellationReason: text("cancellation_reason"), // Mandatory reason for cancellation
+  
+  // NEW: Edit tracking fields
+  editCount: double("edit_count").default(0), // Number of times edited
+  lastEditedBy: varchar("last_edited_by", { length: 36 }), // Last editor
+  lastEditedAt: timestamp("last_edited_at"), // Last edit timestamp
+  
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").onUpdateNow(),
 });
@@ -68,6 +86,22 @@ export const auditLogs = mysqlTable("audit_logs", {
   entityId: varchar("entity_id", { length: 36 }),
   oldValue: text("old_value"),
   newValue: text("new_value"),
+  reason: text("reason"), // NEW: Optional reason for the action
+  ipAddress: varchar("ip_address", { length: 45 }), // NEW: IP address of the actor
+  userAgent: text("user_agent"), // NEW: User agent string
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+// NEW: Submission Approvers - Explicit approver assignment
+// Allows assigning specific approvers to individual submissions
+// If no approvers are assigned, falls back to department-based approval (backward compatible)
+export const submissionApprovers = mysqlTable("submission_approvers", {
+  id: varchar("id", { length: 36 }).primaryKey(),
+  submissionId: varchar("submission_id", { length: 36 }).notNull(),
+  approverUserId: varchar("approver_user_id", { length: 36 }).notNull(),
+  assignedBy: varchar("assigned_by", { length: 36 }).notNull(),
+  assignedAt: timestamp("assigned_at").defaultNow(),
+  approvalOrder: double("approval_order"), // Optional: for sequential approval workflows
   createdAt: timestamp("created_at").defaultNow(),
 });
 
@@ -102,6 +136,14 @@ export const hoursSubmissionsRelations = relations(hoursSubmissions, ({ one }) =
   }),
 }));
 
+// NEW: Submission Approvers Relations
+export const submissionApproversRelations = relations(submissionApprovers, ({ one }) => ({
+  submission: one(hoursSubmissions, {
+    fields: [submissionApprovers.submissionId],
+    references: [hoursSubmissions.id],
+  }),
+}));
+
 // Insert schemas
 export const insertDepartmentSchema = createInsertSchema(departments).omit({ id: true, createdAt: true });
 export const insertUserRoleSchema = createInsertSchema(userRoles).omit({ id: true, createdAt: true });
@@ -117,6 +159,13 @@ export const insertHoursSubmissionSchema = createInsertSchema(hoursSubmissions).
   approverComment: true,
 });
 export const insertAuditLogSchema = createInsertSchema(auditLogs).omit({ id: true, createdAt: true });
+
+// NEW: Submission Approvers schema
+export const insertSubmissionApproverSchema = createInsertSchema(submissionApprovers).omit({ 
+  id: true, 
+  createdAt: true,
+  assignedAt: true,
+});
 
 // Types
 export type Department = typeof departments.$inferSelect;
@@ -136,3 +185,7 @@ export type InsertHoursSubmission = z.infer<typeof insertHoursSubmissionSchema>;
 
 export type AuditLog = typeof auditLogs.$inferSelect;
 export type InsertAuditLog = z.infer<typeof insertAuditLogSchema>;
+
+// NEW: Submission Approver types
+export type SubmissionApprover = typeof submissionApprovers.$inferSelect;
+export type InsertSubmissionApprover = z.infer<typeof insertSubmissionApproverSchema>;
