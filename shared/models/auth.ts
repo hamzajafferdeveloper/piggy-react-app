@@ -29,3 +29,4 @@ export const users = mysqlTable("users", {
 
 export type UpsertUser = typeof users.$inferInsert;
 export type User = typeof users.$inferSelect;
+export type UserWithRoles = User & { roles: string[] };

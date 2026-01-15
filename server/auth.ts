@@ -62,7 +62,9 @@ export function setupAuth(app: Express) {
         maxAge: 7 * 24 * 60 * 60 * 1000,
       });
 
-      res.status(201).json(user);
+      // Return user with roles
+      const userWithRoles = await storage.getUserWithRoles(user.id);
+      res.status(201).json(userWithRoles);
     } catch (err) {
       next(err);
     }
@@ -84,7 +86,9 @@ export function setupAuth(app: Express) {
         maxAge: 7 * 24 * 60 * 60 * 1000,
       });
 
-      res.status(200).json(user);
+      // Return user with roles
+      const userWithRoles = await storage.getUserWithRoles(user.id);
+      res.status(200).json(userWithRoles);
     } catch (err) {
       next(err);
     }
@@ -95,9 +99,12 @@ export function setupAuth(app: Express) {
     res.sendStatus(200);
   });
 
-  app.get("/api/user", (req, res) => {
+  app.get("/api/user", async (req, res) => {
     if (!req.user) return res.sendStatus(401);
-    res.json(req.user);
+    
+    // Return user with roles
+    const userWithRoles = await storage.getUserWithRoles(req.user.id);
+    res.json(userWithRoles);
   });
 }
 

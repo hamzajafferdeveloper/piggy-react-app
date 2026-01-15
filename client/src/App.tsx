@@ -1,4 +1,4 @@
-import { Switch, Route, Redirect } from "wouter";
+import { Switch, Route, Redirect, useLocation } from "wouter";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
@@ -19,6 +19,47 @@ import AdminDashboard from "@/pages/admin";
 import ManageUsers from "@/pages/admin/users";
 import ManageDepartments from "@/pages/admin/departments";
 import AuditLog from "@/pages/admin/audit";
+import { useEffect } from "react";
+
+// Helper to determine primary role
+function getPrimaryRole(roles: string[]): string {
+  if (roles.includes("admin")) return "admin";
+  if (roles.includes("hr")) return "hr";
+  if (roles.includes("approver")) return "approver";
+  return "employee";
+}
+
+// Helper to get default dashboard path for role
+function getDefaultDashboard(roles: string[]): string {
+  const primaryRole = getPrimaryRole(roles);
+  switch (primaryRole) {
+    case "admin":
+      return "/admin";
+    case "hr":
+    case "approver":
+      return "/approvals";
+    default:
+      return "/dashboard";
+  }
+}
+
+// Component that redirects to the appropriate dashboard based on user role
+function DashboardRedirect() {
+  const { user } = useAuth();
+  const [, setLocation] = useLocation();
+
+  useEffect(() => {
+    if (user && "roles" in user && Array.isArray(user.roles)) {
+      const defaultPath = getDefaultDashboard(user.roles);
+      setLocation(defaultPath);
+    } else if (user) {
+      // Fallback if roles not yet loaded
+      setLocation("/dashboard");
+    }
+  }, [user, setLocation]);
+
+  return <LoadingScreen />;
+}
 
 function AppLayout({ children }: { children: React.ReactNode }) {
   const style = {
@@ -46,7 +87,7 @@ function AuthenticatedRouter() {
   return (
     <AppLayout>
       <Switch>
-        <Route path="/" component={Dashboard} />
+        <Route path="/" component={DashboardRedirect} />
         <Route path="/dashboard" component={Dashboard} />
         <Route path="/submit" component={SubmitHours} />
         <Route path="/records" component={Records} />
@@ -83,9 +124,7 @@ function Router() {
   return (
     <Switch>
       <Route path="/auth" component={AuthPage} />
-      <Route path="/">
-        {!user ? <LandingPage /> : <Redirect to="/dashboard" />}
-      </Route>
+      <Route path="/">{!user ? <LandingPage /> : <DashboardRedirect />}</Route>
       <Route>{!user ? <Redirect to="/auth" /> : <AuthenticatedRouter />}</Route>
     </Switch>
   );

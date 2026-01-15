@@ -19,6 +19,7 @@ import {
   type InsertAuditLog,
   users,
   type User,
+  type UserWithRoles,
   type UpsertUser as InsertUser,
 } from "@shared/schema";
 import { db } from "./db";
@@ -78,6 +79,7 @@ export interface IStorage {
 
   // Users
   getUser(id: string): Promise<User | undefined>;
+  getUserWithRoles(id: string): Promise<UserWithRoles | undefined>;
   getUserByEmail(email: string): Promise<User | undefined>;
   createUser(data: InsertUser): Promise<User>;
   getAllUsers(): Promise<User[]>;
@@ -563,6 +565,16 @@ export class DatabaseStorage implements IStorage {
   async getUser(id: string): Promise<User | undefined> {
     const [user] = await db.select().from(users).where(eq(users.id, id));
     return user;
+  }
+
+  async getUserWithRoles(id: string): Promise<UserWithRoles | undefined> {
+    const user = await this.getUser(id);
+    if (!user) return undefined;
+    
+    const userRoleRecords = await this.getUserRoles(id);
+    const roles = userRoleRecords.map(r => r.role);
+    
+    return { ...user, roles };
   }
 
   async getUserByEmail(email: string): Promise<User | undefined> {

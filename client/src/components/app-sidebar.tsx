@@ -1,6 +1,5 @@
 import { Link, useLocation } from "wouter";
 import { useAuth } from "@/hooks/use-auth";
-import { useQuery } from "@tanstack/react-query";
 import {
   Sidebar,
   SidebarContent,
@@ -28,22 +27,16 @@ import {
   LogOut,
 } from "lucide-react";
 
-type UserRole = "employee" | "approver" | "admin" | "hr";
-
-interface UserRoleData {
-  role: UserRole;
-}
-
 export function AppSidebar() {
   const [location] = useLocation();
   const { user, logout } = useAuth();
 
-  const { data: userRoles } = useQuery<UserRoleData[]>({
-    queryKey: ["/api/user/roles"],
-    enabled: !!user,
-  });
+  // Extract roles from user object (now included in auth response)
+  const roles =
+    user && "roles" in user && Array.isArray(user.roles)
+      ? user.roles
+      : ["employee"];
 
-  const roles = userRoles?.map((r) => r.role) || ["employee"];
   const isAdmin = roles.includes("admin");
   const isHR = roles.includes("hr") || isAdmin;
   const isApprover = roles.includes("approver") || isHR;
