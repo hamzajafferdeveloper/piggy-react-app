@@ -53,6 +53,14 @@ interface SubmissionWithDetails extends HoursSubmission {
   user: UserType;
 }
 
+type AttachmentMeta = {
+  originalName: string;
+  filename: string;
+  url: string;
+  mimeType: string;
+  size: number;
+};
+
 export default function Approvals() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -66,6 +74,7 @@ export default function Approvals() {
     "approved"
   );
   const [departmentFilter, setDepartmentFilter] = useState<string>("all");
+  const [previewImage, setPreviewImage] = useState<AttachmentMeta | null>(null);
 
   const { data: pendingApprovals, isLoading } = useQuery<
     SubmissionWithDetails[]
@@ -325,6 +334,9 @@ export default function Approvals() {
                 <thead>
                   <tr className="border-b text-left">
                     <th className="py-3 px-4 text-sm font-medium text-muted-foreground uppercase tracking-wider">
+                      File
+                    </th>
+                    <th className="py-3 px-4 text-sm font-medium text-muted-foreground uppercase tracking-wider">
                       Employee
                     </th>
                     <th className="py-3 px-4 text-sm font-medium text-muted-foreground uppercase tracking-wider">
@@ -348,12 +360,46 @@ export default function Approvals() {
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredApprovals.map((approval) => (
+                  {filteredApprovals.map((approval) => {
+                    const attachments = approval.attachments
+                      ? (JSON.parse(approval.attachments) as AttachmentMeta[])
+                      : [];
+                    const attachment = attachments[0];
+                    const isImage = attachment?.mimeType?.startsWith("image/");
+                    return (
                     <tr
                       key={approval.id}
                       className="border-b last:border-0 hover-elevate"
                       data-testid={`row-approval-${approval.id}`}
                     >
+                      <td className="py-4 px-4 text-sm">
+                        {attachment ? (
+                          isImage ? (
+                            <button
+                              type="button"
+                              onClick={() => setPreviewImage(attachment)}
+                              className="rounded"
+                            >
+                              <img
+                                src={attachment.url}
+                                alt={attachment.originalName}
+                                className="h-10 w-10 rounded object-cover"
+                              />
+                            </button>
+                          ) : (
+                            <a
+                              href={attachment.url}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="text-primary hover:underline"
+                            >
+                              {attachment.originalName}
+                            </a>
+                          )
+                        ) : (
+                          "N/A"
+                        )}
+                      </td>
                       <td className="py-4 px-4">
                         <div className="flex items-center gap-3">
                           <Avatar className="h-8 w-8">
@@ -468,7 +514,8 @@ export default function Approvals() {
                         </div>
                       </td>
                     </tr>
-                  ))}
+                  );
+                  })}
                 </tbody>
               </table>
             </div>
@@ -643,6 +690,27 @@ export default function Approvals() {
                 : "Confirm Escalation"}
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={!!previewImage}
+        onOpenChange={(open) => {
+          if (!open) setPreviewImage(null);
+        }}
+      >
+        <DialogContent className="max-w-3xl">
+          <DialogHeader>
+            <DialogTitle>{previewImage?.originalName}</DialogTitle>
+            <DialogDescription>Preview attachment</DialogDescription>
+          </DialogHeader>
+          {previewImage && (
+            <img
+              src={previewImage.url}
+              alt={previewImage.originalName}
+              className="max-h-[70vh] w-full rounded object-contain"
+            />
+          )}
         </DialogContent>
       </Dialog>
     </div>
