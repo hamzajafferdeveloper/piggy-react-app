@@ -52,6 +52,14 @@ interface SubmissionWithDepartment extends HoursSubmission {
   department: Department;
 }
 
+type AttachmentMeta = {
+  originalName: string;
+  filename: string;
+  url: string;
+  mimeType: string;
+  size: number;
+};
+
 type StatusFilter = "all" | "pending" | "approved" | "rejected";
 type ActionType = "edit" | "cancel" | null;
 
@@ -72,12 +80,18 @@ export default function Records() {
     startTime: "",
     endTime: "",
   });
+  const [existingAttachments, setExistingAttachments] = useState<AttachmentMeta[]>(
+    [],
+  );
+  const [removedAttachments, setRemovedAttachments] = useState<string[]>([]);
+  const [newFile, setNewFile] = useState<File | null>(null);
+  const [previewImage, setPreviewImage] = useState<AttachmentMeta | null>(null);
   const [cancelReason, setCancelReason] = useState("");
 
   const { data: submissions, isLoading } = useQuery<SubmissionWithDepartment[]>(
     {
       queryKey: ["/api/submissions"],
-    }
+    },
   );
 
   const { data: departments } = useQuery<Department[]>({
@@ -86,8 +100,47 @@ export default function Records() {
 
   // Edit Mutation
   const editMutation = useMutation({
-    mutationFn: async ({ id, data }: { id: string; data: any }) => {
-      return apiRequest("PATCH", `/api/submissions/${id}`, data);
+    mutationFn: async ({
+      id,
+      data,
+      file,
+      removed,
+    }: {
+      id: string;
+      data: {
+        totalHours: number;
+        notes: string;
+        date: string;
+        startTime: string;
+        endTime: string;
+      };
+      file: File | null;
+      removed: string[];
+    }) => {
+      const formData = new FormData();
+      formData.append("totalHours", data.totalHours.toString());
+      formData.append("notes", data.notes);
+      formData.append("date", data.date);
+      if (data.startTime) formData.append("startTime", data.startTime);
+      if (data.endTime) formData.append("endTime", data.endTime);
+      if (removed.length > 0) {
+        formData.append("removedAttachments", JSON.stringify(removed));
+      }
+      if (file) {
+        formData.append("files", file);
+      }
+
+      const response = await fetch(`/api/submissions/${id}`, {
+        method: "PATCH",
+        body: formData,
+        credentials: "include",
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to update submission.");
+      }
+
+      return response;
     },
     onSuccess: () => {
       toast({
@@ -97,6 +150,9 @@ export default function Records() {
       queryClient.invalidateQueries({ queryKey: ["/api/submissions"] });
       setSelectedSubmission(null);
       setActionType(null);
+      setExistingAttachments([]);
+      setRemovedAttachments([]);
+      setNewFile(null);
     },
     onError: (error: Error) => {
       toast({
@@ -133,11 +189,14 @@ export default function Records() {
 
   const handleAction = (
     submission: SubmissionWithDepartment,
-    action: "edit" | "cancel"
+    action: "edit" | "cancel",
   ) => {
     setSelectedSubmission(submission);
     setActionType(action);
     if (action === "edit") {
+      const parsedAttachments = submission.attachments
+        ? (JSON.parse(submission.attachments) as AttachmentMeta[])
+        : [];
       setEditData({
         totalHours: submission.totalHours,
         notes: submission.notes || "",
@@ -145,6 +204,9 @@ export default function Records() {
         startTime: submission.startTime || "",
         endTime: submission.endTime || "",
       });
+      setExistingAttachments(parsedAttachments);
+      setRemovedAttachments([]);
+      setNewFile(null);
     }
     setCancelReason("");
   };
@@ -162,6 +224,8 @@ export default function Records() {
           startTime: editData.startTime,
           endTime: editData.endTime,
         },
+        file: newFile,
+        removed: removedAttachments,
       });
     } else if (actionType === "cancel") {
       if (cancelReason.trim().length < 5) {
@@ -377,6 +441,9 @@ export default function Records() {
               <table className="w-full">
                 <thead>
                   <tr className="border-b text-left">
+                  <th className="py-3 px-4 text-sm font-medium text-muted-foreground uppercase tracking-wider">
+                      File
+                    </th>
                     <th className="py-3 px-4 text-sm font-medium text-muted-foreground uppercase tracking-wider">
                       Date
                     </th>
@@ -401,12 +468,46 @@ export default function Records() {
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredSubmissions.map((submission) => (
+                  {filteredSubmissions.map((submission) => {
+                    const attachments = submission.attachments
+                      ? (JSON.parse(submission.attachments) as AttachmentMeta[])
+                      : [];
+                    const attachment = attachments[0];
+                    const isImage = attachment?.mimeType?.startsWith("image/");
+                    return (
                     <tr
                       key={submission.id}
                       className="border-b last:border-0 hover-elevate"
                       data-testid={`row-record-${submission.id}`}
                     >
+                    <td className="py-4 px-4 text-sm">
+                        {attachment ? (
+                          isImage ? (
+                            <button
+                              type="button"
+                              onClick={() => setPreviewImage(attachment)}
+                              className="rounded"
+                            >
+                              <img
+                                src={attachment.url}
+                                alt={attachment.originalName}
+                                className="h-10 w-10 rounded object-cover"
+                              />
+                            </button>
+                          ) : (
+                            <a
+                              href={attachment.url}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="text-primary hover:underline"
+                            >
+                              {attachment.originalName}
+                            </a>
+                          )
+                        ) : (
+                          "N/A"
+                        )}
+                      </td>
                       <td className="py-4 px-4 font-mono text-sm">
                         {format(new Date(submission.date), "MMM dd, yyyy")}
                       </td>
@@ -466,7 +567,8 @@ export default function Records() {
                         </div>
                       </td>
                     </tr>
-                  ))}
+                  );
+                  })}
                 </tbody>
               </table>
             </div>
@@ -558,6 +660,67 @@ export default function Records() {
                 rows={3}
               />
             </div>
+
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Current Attachments</label>
+              {existingAttachments.length === 0 ? (
+                <p className="text-sm text-muted-foreground">No attachments.</p>
+              ) : (
+                <ul className="space-y-2">
+                  {existingAttachments.map((attachment) => {
+                    const isRemoved = removedAttachments.includes(
+                      attachment.filename,
+                    );
+                    return (
+                      <li
+                        key={attachment.filename}
+                        className="flex items-center justify-between gap-2 text-sm"
+                      >
+                        <a
+                          href={attachment.url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className={
+                            isRemoved
+                              ? "line-through text-muted-foreground"
+                              : "text-primary hover:underline"
+                          }
+                        >
+                          {attachment.originalName}
+                        </a>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => {
+                            setRemovedAttachments((prev) =>
+                              prev.includes(attachment.filename)
+                                ? prev.filter(
+                                    (name) => name !== attachment.filename,
+                                  )
+                                : [...prev, attachment.filename],
+                            );
+                          }}
+                        >
+                          {isRemoved ? "Undo" : "Remove"}
+                        </Button>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Add Attachments</label>
+              <Input
+                type="file"
+                onChange={(e) => {
+                  const [file] = Array.from(e.target.files || []);
+                  setNewFile(file ?? null);
+                }}
+              />
+            </div>
           </div>
 
           <DialogFooter>
@@ -568,6 +731,27 @@ export default function Records() {
               {editMutation.isPending ? "Saving..." : "Save Changes"}
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={!!previewImage}
+        onOpenChange={(open) => {
+          if (!open) setPreviewImage(null);
+        }}
+      >
+        <DialogContent className="max-w-3xl">
+          <DialogHeader>
+            <DialogTitle>{previewImage?.originalName}</DialogTitle>
+            <DialogDescription>Preview attachment</DialogDescription>
+          </DialogHeader>
+          {previewImage && (
+            <img
+              src={previewImage.url}
+              alt={previewImage.originalName}
+              className="max-h-[70vh] w-full rounded object-contain"
+            />
+          )}
         </DialogContent>
       </Dialog>
 

@@ -55,7 +55,7 @@ const formSchema = z
     endTime: z.string().optional(),
     totalHours: z.coerce.number().min(0.5).max(24),
     notes: z.string().optional(),
-    files: z.array(z.instanceof(File)).optional(),
+    file: z.instanceof(File).optional(),
   })
   .refine(
     (data) => {
@@ -67,14 +67,14 @@ const formSchema = z
     {
       message: "Start and end time are required when using time range",
       path: ["startTime"],
-    }
+    },
   );
 
 type FormData = z.infer<typeof formSchema>;
 
 function calculateHoursFromTimeRange(
   startTime: string,
-  endTime: string
+  endTime: string,
 ): number {
   const [startHour, startMin] = startTime.split(":").map(Number);
   const [endHour, endMin] = endTime.split(":").map(Number);
@@ -171,19 +171,17 @@ export default function SubmitHours() {
         data.useTimeRange
           ? calculateHoursFromTimeRange(
               data.startTime!,
-              data.endTime!
+              data.endTime!,
             ).toString()
-          : data.totalHours.toString()
+          : data.totalHours.toString(),
       );
 
       if (data.startTime) formData.append("startTime", data.startTime);
       if (data.endTime) formData.append("endTime", data.endTime);
       if (data.notes) formData.append("notes", data.notes);
 
-      if (data.files) {
-        data.files.forEach((file) => {
-          formData.append("files", file);
-        });
+      if (data.file) {
+        formData.append("files", data.file);
       }
 
       const response = await fetch("/api/submissions", {
@@ -231,7 +229,7 @@ export default function SubmitHours() {
       });
     },
   });
-  
+
   const onSubmit = (data: FormData) => {
     submitMutation.mutate(data);
   };
@@ -433,17 +431,16 @@ export default function SubmitHours() {
 
                   <FormField
                     control={form.control}
-                    name="files"
+                    name="file"
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel>Attachments (Optional)</FormLabel>
                         <FormControl>
                           <Input
                             type="file"
-                            multiple
                             onChange={(e) => {
-                              const files = Array.from(e.target.files || []);
-                              field.onChange(files);
+                              const [file] = Array.from(e.target.files || []);
+                              field.onChange(file);
                             }}
                             data-testid="input-files"
                           />

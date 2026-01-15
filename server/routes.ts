@@ -57,6 +57,14 @@ export async function registerRoutes(
     size: number;
   };
 
+  type AttachmentMeta = {
+    originalName: string;
+    filename: string;
+    url: string;
+    mimeType: string;
+    size: number;
+  };
+
   const uploadsDir = path.resolve(process.cwd(), "uploads");
   if (!fs.existsSync(uploadsDir)) {
     fs.mkdirSync(uploadsDir, { recursive: true });
@@ -484,7 +492,7 @@ export async function registerRoutes(
       const userId = getUserId(req);
 
       const uploadedFiles = ((req as Request).files as UploadedFile[] | undefined) || [];
-      const attachments = uploadedFiles.map((file) => ({
+      const attachments: AttachmentMeta[] = uploadedFiles.map((file) => ({
         originalName: file.originalname,
         filename: file.filename,
         url: `/uploads/${file.filename}`,
@@ -920,7 +928,11 @@ export async function registerRoutes(
    * Edit a submission
    * Permission: Owner if pending, Admin/HR for any
    */
-  app.patch("/api/submissions/:id", isAuthenticated, async (req, res) => {
+  app.patch(
+    "/api/submissions/:id",
+    isAuthenticated,
+    upload.array("files"),
+    async (req, res) => {
     try {
       const userId = getUserId(req);
       const { id } = req.params;
@@ -956,14 +968,42 @@ export async function registerRoutes(
           .json({ message: "Can only edit pending submissions" });
       }
 
+      const existingAttachments = submission.attachments
+        ? (JSON.parse(submission.attachments) as AttachmentMeta[])
+        : [];
+      const removedAttachments = req.body.removedAttachments
+        ? (JSON.parse(req.body.removedAttachments) as string[])
+        : [];
+      const uploadedFiles = ((req as Request).files as UploadedFile[] | undefined) || [];
+      const newUploads: AttachmentMeta[] = uploadedFiles.map((file) => ({
+        originalName: file.originalname,
+        filename: file.filename,
+        url: `/uploads/${file.filename}`,
+        mimeType: file.mimetype,
+        size: file.size,
+      }));
+
+      removedAttachments.forEach((filename) => {
+        const filePath = path.join(uploadsDir, filename);
+        fs.unlink(filePath, () => undefined);
+      });
+
+      const mergedAttachments = existingAttachments
+        .filter((attachment) => !removedAttachments.includes(attachment.filename))
+        .concat(newUploads);
+
       // Build update data
       const updateData: Partial<InsertHoursSubmission> = {};
-      if (totalHours !== undefined) updateData.totalHours = totalHours;
+      if (totalHours !== undefined) updateData.totalHours = Number(totalHours);
       if (notes !== undefined) updateData.notes = notes;
       if (date !== undefined) updateData.date = new Date(date);
       if (startTime !== undefined) updateData.startTime = startTime;
       if (endTime !== undefined) updateData.endTime = endTime;
       if (departmentId !== undefined) updateData.departmentId = departmentId;
+      if (removedAttachments.length > 0 || newUploads.length > 0) {
+        updateData.attachments =
+          mergedAttachments.length > 0 ? JSON.stringify(mergedAttachments) : null;
+      }
 
       // Store old values for audit
       const oldValues = {
