@@ -1,7 +1,7 @@
 import { Badge } from "@/components/ui/badge";
-import { Clock, CheckCircle, XCircle } from "lucide-react";
+import { Clock, CheckCircle, XCircle, ArrowUpCircle } from "lucide-react";
 
-type Status = "pending" | "approved" | "rejected" ;
+type Status = "pending" | "approved" | "rejected" | "escalated";
 
 interface StatusBadgeProps {
   status: Status;
@@ -27,10 +27,25 @@ const statusConfig = {
     className:
       "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400 border-red-200 dark:border-red-800",
   },
+  escalated: {
+    label: "Escalated",
+    icon: ArrowUpCircle,
+    className:
+      "bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-400 border-purple-200 dark:border-purple-800",
+  },
 };
 
 export function StatusBadge({ status, className = "" }: StatusBadgeProps) {
   const config = statusConfig[status];
+
+  if (!config) {
+    return (
+      <Badge variant="outline" className={className}>
+        Unknown
+      </Badge>
+    );
+  }
+
   const Icon = config.icon;
 
   return (

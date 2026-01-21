@@ -48,7 +48,7 @@ import type { Department } from "@shared/schema";
 
 const formSchema = z
   .object({
-    departmentId: z.string().min(1, "Please select a department"),
+    // departmentId: z.string().min(1, "Please select a department"), // Removed
     date: z.date({ required_error: "Please select a date" }),
     useTimeRange: z.boolean().default(false),
     startTime: z.string().optional(),
@@ -81,7 +81,11 @@ function calculateHoursFromTimeRange(
   const startMinutes = startHour * 60 + startMin;
   const endMinutes = endHour * 60 + endMin;
   const diff = endMinutes - startMinutes;
-  return Math.max(0, Math.round((diff / 60) * 10) / 10);
+
+  // Calculate hours and round DOWN to nearest 0.5
+  const exactHours = Math.max(0, diff / 60);
+  // Example: 0.9 -> 0.5. 1.4 -> 1.0. 0.4 -> 0.
+  return Math.floor(exactHours * 2) / 2;
 }
 
 export default function SubmitHours() {
@@ -99,7 +103,7 @@ export default function SubmitHours() {
   const form = useForm<FormData>({
     resolver: zodResolver(formSchema),
     defaultValues: {
-      departmentId: "",
+      // departmentId: "", // Removed
       useTimeRange: false,
       startTime: "09:00",
       endTime: "17:00",
@@ -164,7 +168,7 @@ export default function SubmitHours() {
     mutationFn: async (data: FormData) => {
       const formData = new FormData();
 
-      formData.append("departmentId", data.departmentId);
+      // formData.append("departmentId", data.departmentId); // Removed
       formData.append("date", data.date.toISOString());
       formData.append(
         "totalHours",
@@ -280,33 +284,7 @@ export default function SubmitHours() {
                   className="space-y-6"
                 >
                   <div className="grid gap-6 md:grid-cols-2">
-                    <FormField
-                      control={form.control}
-                      name="departmentId"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Department</FormLabel>
-                          <Select
-                            onValueChange={field.onChange}
-                            defaultValue={field.value}
-                          >
-                            <FormControl>
-                              <SelectTrigger data-testid="select-department">
-                                <SelectValue placeholder="Select department" />
-                              </SelectTrigger>
-                            </FormControl>
-                            <SelectContent>
-                              {departments?.map((dept) => (
-                                <SelectItem key={dept.id} value={dept.id}>
-                                  {dept.name}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
+                    {/* Department Removed */}
 
                     <FormField
                       control={form.control}

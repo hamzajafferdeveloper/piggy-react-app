@@ -9,6 +9,7 @@ import { isAuthenticated } from "./auth";
 import {
   insertDepartmentSchema,
   insertHoursSubmissionSchema,
+  insertHoursWithdrawalSchema, // NEW
   type InsertHoursSubmission,
 } from "@shared/schema";
 import { z } from "zod";
@@ -109,6 +110,66 @@ export async function registerRoutes(
     } catch (error) {
       console.error("Error fetching user roles:", error);
       res.status(500).json({ message: "Failed to fetch user roles" });
+    }
+  });
+
+  // ===================
+  // BALANCE & WITHDRAWALS
+  // ===================
+
+  app.get("/api/user/balance", isAuthenticated, async (req, res) => {
+    try {
+      const userId = getUserId(req);
+      const balance = await storage.getUserBalance(userId);
+      res.json(balance);
+    } catch (error) {
+      console.error("Error fetching user balance:", error);
+      res.status(500).json({ message: "Failed to fetch user balance" });
+    }
+  });
+
+  app.post("/api/withdrawals", isAuthenticated, async (req, res) => {
+    try {
+      const userId = getUserId(req);
+      const data = insertHoursWithdrawalSchema.parse({
+        ...req.body,
+        userId,
+        date: new Date(req.body.date),
+      });
+
+      // 1. Validate Amount
+      if (data.amount <= 0) {
+        return res.status(400).json({ message: "Amount must be positive" });
+      }
+
+      // 2. Check Balance
+      const { currentBalance } = await storage.getUserBalance(userId);
+      if (currentBalance < data.amount) {
+        return res.status(400).json({
+          message: `Insufficient balance. Available: ${currentBalance} hours`,
+        });
+      }
+
+      const withdrawal = await storage.createWithdrawal(data);
+
+      await storage.createAuditLog({
+        userId,
+        action: "hours_withdrawn",
+        entityType: "withdrawal",
+        entityId: withdrawal.id,
+        newValue: `${data.amount} hours`,
+        reason: data.reason,
+      });
+
+      res.status(201).json(withdrawal);
+    } catch (error) {
+      console.error("Error creating withdrawal:", error);
+      if (error instanceof z.ZodError) {
+        return res
+          .status(400)
+          .json({ message: "Invalid data", errors: error.errors });
+      }
+      res.status(500).json({ message: "Failed to create withdrawal" });
     }
   });
 
@@ -500,9 +561,31 @@ export async function registerRoutes(
         size: file.size,
       }));
 
+      const submittedTotalHours = Number(req.body.totalHours);
+
+      // Validate hours increment (strict 0.5 enforcement)
+      if (submittedTotalHours % 0.5 !== 0) {
+        return res
+          .status(400)
+          .json({ message: "Total hours must be in 0.5 increments" });
+      }
+
+      let departmentId = req.body.departmentId;
+
+      // If departmentId is NOT provided, fetch it
+      if (!departmentId) {
+        // Get user's primary department (first one found)
+        const userDepts = await storage.getEmployeeDepartments(userId);
+        if (userDepts.length === 0) {
+           return res.status(400).json({ message: "You are not assigned to any department. Please contact HR." });
+        }
+        departmentId = userDepts[0].departmentId;
+      }
+
       const data = insertHoursSubmissionSchema.parse({
         ...req.body,
-        totalHours: Number(req.body.totalHours),
+        totalHours: submittedTotalHours,
+        departmentId, // Injected or validated
         userId,
         date: new Date(req.body.date),
         attachments: attachments.length > 0 ? JSON.stringify(attachments) : null,
@@ -643,8 +726,8 @@ export async function registerRoutes(
           return res.status(404).json({ message: "Submission not found" });
         }
 
-        // Check if submission is still pending (state guard)
-        if (submission.status !== "pending") {
+        // Check if submission is still pending or escalated (state guard)
+        if (submission.status !== "pending" && submission.status !== "escalated") {
           return res
             .status(409)
             .json({ message: "Submission has already been processed" });

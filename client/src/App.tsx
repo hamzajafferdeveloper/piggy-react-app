@@ -13,6 +13,7 @@ import LandingPage from "@/pages/landing";
 import AuthPage from "@/pages/auth-page";
 import Dashboard from "@/pages/dashboard";
 import SubmitHours from "@/pages/submit-hours";
+import WithdrawHours from "@/pages/withdraw-hours"; // NEW
 import Records from "@/pages/records";
 import Approvals from "@/pages/approvals";
 import AdminDashboard from "@/pages/admin";
@@ -91,6 +92,7 @@ function AuthenticatedRouter() {
         <Route path="/" component={DashboardRedirect} />
         <Route path="/dashboard" component={Dashboard} />
         <Route path="/submit" component={SubmitHours} />
+        <Route path="/withdraw" component={WithdrawHours} /> {/* NEW */}
         <Route path="/records" component={Records} />
         <Route path="/approvals" component={Approvals} />
         <Route path="/approvals/all" component={AllApprovals} />

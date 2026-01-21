@@ -5,6 +5,7 @@ import { z } from "zod";
 
 // Re-export auth models
 export * from "./models/auth";
+import { users } from "./models/auth";
 
 // Departments table
 export const departments = mysqlTable("departments", {
@@ -106,6 +107,16 @@ export const submissionApprovers = mysqlTable("submission_approvers", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
+// NEW: Hours Withdrawals table
+export const hoursWithdrawals = mysqlTable("hours_withdrawals", {
+  id: varchar("id", { length: 36 }).primaryKey(),
+  userId: varchar("user_id", { length: 36 }).notNull(),
+  amount: double("amount").notNull(),
+  reason: text("reason"),
+  date: timestamp("date").notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
 
 // Relations
 export const departmentsRelations = relations(departments, ({ many }) => ({
@@ -145,6 +156,13 @@ export const submissionApproversRelations = relations(submissionApprovers, ({ on
   }),
 }));
 
+export const hoursWithdrawalsRelations = relations(hoursWithdrawals, ({ one }) => ({
+  user: one(users, {
+    fields: [hoursWithdrawals.userId],
+    references: [users.id],
+  }),
+}));
+
 // Insert schemas
 export const insertDepartmentSchema = createInsertSchema(departments).omit({ id: true, createdAt: true });
 export const insertUserRoleSchema = createInsertSchema(userRoles).omit({ id: true, createdAt: true });
@@ -166,6 +184,11 @@ export const insertSubmissionApproverSchema = createInsertSchema(submissionAppro
   id: true, 
   createdAt: true,
   assignedAt: true,
+});
+
+export const insertHoursWithdrawalSchema = createInsertSchema(hoursWithdrawals).omit({
+  id: true,
+  createdAt: true,
 });
 
 // Types
@@ -190,3 +213,6 @@ export type InsertAuditLog = z.infer<typeof insertAuditLogSchema>;
 // NEW: Submission Approver types
 export type SubmissionApprover = typeof submissionApprovers.$inferSelect;
 export type InsertSubmissionApprover = z.infer<typeof insertSubmissionApproverSchema>;
+
+export type HoursWithdrawal = typeof hoursWithdrawals.$inferSelect;
+export type InsertHoursWithdrawal = z.infer<typeof insertHoursWithdrawalSchema>;

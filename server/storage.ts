@@ -20,6 +20,9 @@ import {
   type InsertAuditLog,
   type SubmissionApprover, // NEW
   type InsertSubmissionApprover, // NEW
+  hoursWithdrawals, // NEW
+  type HoursWithdrawal,
+  type InsertHoursWithdrawal,
   users,
   type User,
   type UserWithRoles,
@@ -165,6 +168,15 @@ export interface IStorage {
   createUser(data: InsertUser): Promise<User>;
   getAllUsers(): Promise<User[]>;
   getAllUsersWithRoles(): Promise<any[]>;
+
+  // NEW: Withdrawals
+  createWithdrawal(data: InsertHoursWithdrawal): Promise<HoursWithdrawal>;
+  getWithdrawalsByUser(userId: string): Promise<HoursWithdrawal[]>;
+  getUserBalance(userId: string): Promise<{
+    totalDeposited: number;
+    totalWithdrawn: number;
+    currentBalance: number;
+  }>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -230,6 +242,70 @@ export class DatabaseStorage implements IStorage {
       }),
     );
     return result;
+  }
+
+  // NEW: Withdrawals and Balance Logic
+  async createWithdrawal(data: InsertHoursWithdrawal): Promise<HoursWithdrawal> {
+    const id = randomUUID();
+    await db.insert(hoursWithdrawals).values({ ...data, id });
+    const [withdrawal] = await db
+      .select()
+      .from(hoursWithdrawals)
+      .where(eq(hoursWithdrawals.id, id));
+    return withdrawal;
+  }
+
+  async getWithdrawalsByUser(userId: string): Promise<HoursWithdrawal[]> {
+    return db
+      .select()
+      .from(hoursWithdrawals)
+      .where(eq(hoursWithdrawals.userId, userId))
+      .orderBy(desc(hoursWithdrawals.date));
+  }
+
+  async getUserBalance(userId: string): Promise<{
+    totalDeposited: number;
+    totalWithdrawn: number;
+    currentBalance: number;
+  }> {
+    // 1. Calculate Total Deposited (Approved hours ONLY)
+    // We only count submissions with status 'approved'
+    // 'escalated' or 'pending' do NOT count towards balance yet.
+    const approvedSubmissions = await db
+      .select({
+        totalHours: hoursSubmissions.totalHours,
+      })
+      .from(hoursSubmissions)
+      .where(
+        and(
+          eq(hoursSubmissions.userId, userId),
+          eq(hoursSubmissions.status, "approved")
+        )
+      );
+
+    const totalDeposited = approvedSubmissions.reduce(
+      (sum, sub) => sum + sub.totalHours,
+      0
+    );
+
+    // 2. Calculate Total Withdrawn
+    const withdrawals = await db
+      .select({
+        amount: hoursWithdrawals.amount,
+      })
+      .from(hoursWithdrawals)
+      .where(eq(hoursWithdrawals.userId, userId));
+
+    const totalWithdrawn = withdrawals.reduce((sum, w) => sum + w.amount, 0);
+
+    // 3. Calculate Balance
+    const currentBalance = totalDeposited - totalWithdrawn;
+
+    return {
+      totalDeposited,
+      totalWithdrawn,
+      currentBalance,
+    };
   }
 
   // User Roles

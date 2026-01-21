@@ -1,13 +1,26 @@
 import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/use-auth";
 import { Link } from "wouter";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { StatCard } from "@/components/stat-card";
 import { StatusBadge } from "@/components/status-badge";
 import { EmptyState } from "@/components/empty-state";
 import { StatCardSkeleton, TableSkeleton } from "@/components/loading-skeleton";
-import { Clock, CheckCircle, FileText, Plus, ArrowRight } from "lucide-react";
+import {
+  Clock,
+  CheckCircle,
+  FileText,
+  Plus,
+  ArrowRight,
+  MinusCircle,
+} from "lucide-react";
 import { format } from "date-fns";
 import type { HoursSubmission, Department } from "@shared/schema";
 
@@ -28,7 +41,15 @@ export default function Dashboard() {
     queryKey: ["/api/dashboard/stats"],
   });
 
-  const { data: recentSubmissions, isLoading: submissionsLoading } = useQuery<SubmissionWithDepartment[]>({
+  const { data: balanceData, isLoading: balanceLoading } = useQuery<{
+    currentBalance: number;
+  }>({
+    queryKey: ["/api/user/balance"],
+  });
+
+  const { data: recentSubmissions, isLoading: submissionsLoading } = useQuery<
+    SubmissionWithDepartment[]
+  >({
     queryKey: ["/api/submissions", "recent"],
   });
 
@@ -36,21 +57,31 @@ export default function Dashboard() {
     <div className="space-y-8">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold">Welcome back, {user?.firstName || "User"}</h1>
+          <h1 className="text-2xl font-bold">
+            Welcome back, {user?.firstName || "User"}
+          </h1>
           <p className="text-muted-foreground">
             Here's an overview of your overtime hours activity.
           </p>
         </div>
-        <Button asChild className="gap-2" data-testid="button-quick-submit">
-          <Link href="/submit">
-            <Plus className="h-4 w-4" />
-            Submit Hours
-          </Link>
-        </Button>
+        <div className="flex gap-2">
+          <Button asChild variant="outline" className="gap-2">
+            <Link href="/withdraw">
+              <MinusCircle className="h-4 w-4" />
+              Withdraw Hours
+            </Link>
+          </Button>
+          <Button asChild className="gap-2" data-testid="button-quick-submit">
+            <Link href="/submit">
+              <Plus className="h-4 w-4" />
+              Submit Hours
+            </Link>
+          </Button>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-        {statsLoading ? (
+        {statsLoading || balanceLoading ? (
           <>
             <StatCardSkeleton />
             <StatCardSkeleton />
@@ -84,9 +115,17 @@ export default function Dashboard() {
         <CardHeader className="flex flex-row items-center justify-between gap-4 space-y-0">
           <div>
             <CardTitle>Recent Submissions</CardTitle>
-            <CardDescription>Your latest overtime hour submissions</CardDescription>
+            <CardDescription>
+              Your latest overtime hour submissions
+            </CardDescription>
           </div>
-          <Button variant="outline" size="sm" asChild className="gap-2" data-testid="button-view-all-records">
+          <Button
+            variant="outline"
+            size="sm"
+            asChild
+            className="gap-2"
+            data-testid="button-view-all-records"
+          >
             <Link href="/records">
               View All
               <ArrowRight className="h-4 w-4" />
@@ -101,16 +140,30 @@ export default function Dashboard() {
               <table className="w-full">
                 <thead>
                   <tr className="border-b text-left">
-                    <th className="py-3 px-4 text-sm font-medium text-muted-foreground uppercase tracking-wider">Date</th>
-                    <th className="py-3 px-4 text-sm font-medium text-muted-foreground uppercase tracking-wider">Department</th>
-                    <th className="py-3 px-4 text-sm font-medium text-muted-foreground uppercase tracking-wider">Hours</th>
-                    <th className="py-3 px-4 text-sm font-medium text-muted-foreground uppercase tracking-wider">Status</th>
-                    <th className="py-3 px-4 text-sm font-medium text-muted-foreground uppercase tracking-wider">Submitted</th>
+                    <th className="py-3 px-4 text-sm font-medium text-muted-foreground uppercase tracking-wider">
+                      Date
+                    </th>
+                    <th className="py-3 px-4 text-sm font-medium text-muted-foreground uppercase tracking-wider">
+                      Department
+                    </th>
+                    <th className="py-3 px-4 text-sm font-medium text-muted-foreground uppercase tracking-wider">
+                      Hours
+                    </th>
+                    <th className="py-3 px-4 text-sm font-medium text-muted-foreground uppercase tracking-wider">
+                      Status
+                    </th>
+                    <th className="py-3 px-4 text-sm font-medium text-muted-foreground uppercase tracking-wider">
+                      Submitted
+                    </th>
                   </tr>
                 </thead>
                 <tbody>
                   {recentSubmissions.slice(0, 5).map((submission) => (
-                    <tr key={submission.id} className="border-b last:border-0 hover-elevate" data-testid={`row-submission-${submission.id}`}>
+                    <tr
+                      key={submission.id}
+                      className="border-b last:border-0 hover-elevate"
+                      data-testid={`row-submission-${submission.id}`}
+                    >
                       <td className="py-4 px-4 font-mono text-sm">
                         {format(new Date(submission.date), "MMM dd, yyyy")}
                       </td>
@@ -138,7 +191,7 @@ export default function Dashboard() {
               description="Start tracking your overtime hours by submitting your first entry."
               action={{
                 label: "Submit Hours",
-                onClick: () => window.location.href = "/submit",
+                onClick: () => (window.location.href = "/submit"),
               }}
             />
           )}
