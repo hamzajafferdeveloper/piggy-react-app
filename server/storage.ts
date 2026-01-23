@@ -29,7 +29,7 @@ import {
   type UpsertUser as InsertUser,
 } from "@shared/schema";
 import { db } from "./db";
-import { eq, and, or, desc, sql, gte, lte } from "drizzle-orm";
+import { eq, and, or, desc, sql, gte, lte, inArray, ne } from "drizzle-orm";
 import { randomUUID } from "crypto";
 
 export interface IStorage {
@@ -149,6 +149,10 @@ export interface IStorage {
     totalHoursSubmitted: number;
     pendingCount: number;
     approvedThisMonth: number;
+    withdrawnThisMonth: number;
+    pendingSubmissionHours: number;
+    pendingWithdrawalHours: number;
+    hoursAvailable: number;
   }>;
   getAdminStats(): Promise<{
     totalEmployees: number;
@@ -188,6 +192,8 @@ export interface IStorage {
     reason: string,
   ): Promise<HoursWithdrawal | undefined>;
 
+  getPendingWithdrawals(approverId: string): Promise<any[]>;
+  getAllPendingWithdrawals(): Promise<any[]>;
   getPendingWithdrawalApprovals(approverId: string): Promise<any[]>;
 }
 
@@ -269,12 +275,116 @@ export class DatabaseStorage implements IStorage {
     return withdrawal;
   }
 
-  async getWithdrawalsByUser(userId: string): Promise<HoursWithdrawal[]> {
-    return db
-      .select()
+  async getWithdrawalsByUser(userId: string): Promise<any[]> {
+    const withdrawals = await db
+      .select({
+        withdrawal: hoursWithdrawals,
+        dept: departments,
+      })
       .from(hoursWithdrawals)
+      .innerJoin(users, eq(hoursWithdrawals.userId, users.id))
+      .innerJoin(employeeDepartments, eq(users.id, employeeDepartments.userId))
+      .innerJoin(
+        departments,
+        eq(employeeDepartments.departmentId, departments.id),
+      )
       .where(eq(hoursWithdrawals.userId, userId))
       .orderBy(desc(hoursWithdrawals.date));
+
+    return withdrawals.map(({ withdrawal, dept }) => ({
+      ...withdrawal,
+      department: dept,
+    }));
+  }
+
+  async getWithdrawal(id: string): Promise<any | undefined> {
+    const results = await db
+      .select({
+        withdrawal: hoursWithdrawals,
+        dept: departments,
+        user: users,
+      })
+      .from(hoursWithdrawals)
+      .innerJoin(users, eq(hoursWithdrawals.userId, users.id))
+      .innerJoin(employeeDepartments, eq(users.id, employeeDepartments.userId))
+      .innerJoin(
+        departments,
+        eq(employeeDepartments.departmentId, departments.id),
+      )
+      .where(eq(hoursWithdrawals.id, id));
+
+    if (results.length === 0) return undefined;
+    const { withdrawal, dept, user } = results[0];
+    return { ...withdrawal, department: dept, user };
+  }
+
+  async getAllPendingWithdrawals(): Promise<any[]> {
+    const pendingWithdrawals = await db
+      .select({
+        withdrawal: hoursWithdrawals,
+        dept: departments,
+        user: users,
+      })
+      .from(hoursWithdrawals)
+      .innerJoin(users, eq(hoursWithdrawals.userId, users.id))
+      .innerJoin(employeeDepartments, eq(users.id, employeeDepartments.userId))
+      .innerJoin(
+        departments,
+        eq(employeeDepartments.departmentId, departments.id),
+      )
+      .where(eq(hoursWithdrawals.status, "pending"))
+      .orderBy(desc(hoursWithdrawals.createdAt));
+
+    return pendingWithdrawals.map(({ withdrawal, dept, user }) => ({
+      ...withdrawal,
+      department: dept,
+      user,
+    }));
+  }
+
+  async getPendingWithdrawals(approverId: string): Promise<any[]> {
+    // 1. Get departments where user is an approver
+    const approverDepts = await db
+      .select()
+      .from(departmentApprovers)
+      .where(eq(departmentApprovers.userId, approverId));
+
+    const deptIds = approverDepts.map((d) => d.departmentId);
+
+    if (deptIds.length === 0) return [];
+
+    // 2. Get pending withdrawals for those departments by joining with employeeDepartments
+    const pendingWithdrawals = await db
+      .select({
+        withdrawal: hoursWithdrawals,
+        dept: departments,
+        user: users,
+      })
+      .from(hoursWithdrawals)
+      .innerJoin(users, eq(hoursWithdrawals.userId, users.id))
+      .innerJoin(employeeDepartments, eq(users.id, employeeDepartments.userId))
+      .innerJoin(
+        departments,
+        eq(employeeDepartments.departmentId, departments.id),
+      )
+      .where(
+        and(
+          eq(hoursWithdrawals.status, "pending"),
+          inArray(employeeDepartments.departmentId, deptIds),
+          ne(hoursWithdrawals.userId, approverId),
+        ),
+      )
+      .orderBy(desc(hoursWithdrawals.createdAt));
+
+    return pendingWithdrawals.map(({ withdrawal, dept, user }) => ({
+      ...withdrawal,
+      department: dept,
+      user,
+    }));
+  }
+
+  async getPendingWithdrawalApprovals(approverId: string): Promise<any[]> {
+    return this.getPendingWithdrawals(approverId);
   }
 
   async approveWithdrawal(
@@ -490,6 +600,11 @@ export class DatabaseStorage implements IStorage {
   async addEmployeeToDepartment(
     data: InsertEmployeeDepartment,
   ): Promise<EmployeeDepartment> {
+    // First, remove any existing department assignments to ensure 1:N relationship
+    await db
+      .delete(employeeDepartments)
+      .where(eq(employeeDepartments.userId, data.userId));
+
     const id = randomUUID();
     await db.insert(employeeDepartments).values({ ...data, id });
     const [result] = await db
@@ -1143,11 +1258,17 @@ export class DatabaseStorage implements IStorage {
     totalHoursSubmitted: number;
     pendingCount: number;
     approvedThisMonth: number;
+    withdrawnThisMonth: number;
+    pendingSubmissionHours: number;
+    pendingWithdrawalHours: number;
+    hoursAvailable: number;
   }> {
     const allSubmissions = await db
       .select()
       .from(hoursSubmissions)
       .where(eq(hoursSubmissions.userId, userId));
+
+    const allWithdrawals = await this.getWithdrawalsByUser(userId);
 
     const now = new Date();
     const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
@@ -1160,7 +1281,15 @@ export class DatabaseStorage implements IStorage {
       (s) => s.status === "pending",
     ).length;
 
-    const approvedThisMonth = allSubmissions
+    const pendingSubmissionHours = allSubmissions
+      .filter((s) => s.status === "pending")
+      .reduce((sum, s) => sum + s.totalHours, 0);
+
+    const pendingWithdrawalHours = allWithdrawals
+      .filter((w) => w.status === "pending")
+      .reduce((sum, w) => sum + w.amount, 0);
+
+    const approvedThisMonthResult = allSubmissions
       .filter(
         (s) =>
           s.status === "approved" &&
@@ -1169,7 +1298,24 @@ export class DatabaseStorage implements IStorage {
       )
       .reduce((sum, s) => sum + s.totalHours, 0);
 
-    return { totalHoursSubmitted, pendingCount, approvedThisMonth };
+    const withdrawnThisMonthResult = allWithdrawals
+      .filter(
+        (w) => w.status === "approved" && new Date(w.date) >= startOfMonth,
+      )
+      .reduce((sum, w) => sum + w.amount, 0);
+
+    const { currentBalance: hoursAvailable } =
+      await this.getUserBalance(userId);
+
+    return {
+      totalHoursSubmitted,
+      pendingCount,
+      approvedThisMonth: approvedThisMonthResult,
+      withdrawnThisMonth: withdrawnThisMonthResult,
+      pendingSubmissionHours,
+      pendingWithdrawalHours,
+      hoursAvailable,
+    };
   }
 
   async getAdminStats(): Promise<{

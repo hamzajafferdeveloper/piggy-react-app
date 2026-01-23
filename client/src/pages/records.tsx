@@ -85,6 +85,8 @@ export default function Records() {
   const [departmentFilter, setDepartmentFilter] = useState<string>("all");
   const [dateFrom, setDateFrom] = useState<Date | undefined>();
   const [dateTo, setDateTo] = useState<Date | undefined>();
+  const [isFromDateOpen, setIsFromDateOpen] = useState(false);
+  const [isToDateOpen, setIsToDateOpen] = useState(false);
   const [selectedSubmission, setSelectedSubmission] =
     useState<SubmissionWithDepartment | null>(null);
   const [actionType, setActionType] = useState<ActionType>(null);
@@ -280,7 +282,8 @@ export default function Records() {
 
   const filteredSubmissions = allRecords?.filter((record) => {
     // Determine status for record
-    record.status;
+    const recordStatus =
+      record.type === "submission" ? record.status : record.status;
 
     if (statusFilter !== "all" && recordStatus !== statusFilter) return false;
 
@@ -403,7 +406,7 @@ export default function Records() {
 
             <div className="space-y-2">
               <label className="text-sm font-medium">From Date</label>
-              <Popover>
+              <Popover open={isFromDateOpen} onOpenChange={setIsFromDateOpen}>
                 <PopoverTrigger asChild>
                   <Button
                     variant="outline"
@@ -418,7 +421,10 @@ export default function Records() {
                   <Calendar
                     mode="single"
                     selected={dateFrom}
-                    onSelect={setDateFrom}
+                    onSelect={(date) => {
+                      setDateFrom(date);
+                      setIsFromDateOpen(false);
+                    }}
                     initialFocus
                   />
                 </PopoverContent>
@@ -427,7 +433,7 @@ export default function Records() {
 
             <div className="space-y-2">
               <label className="text-sm font-medium">To Date</label>
-              <Popover>
+              <Popover open={isToDateOpen} onOpenChange={setIsToDateOpen}>
                 <PopoverTrigger asChild>
                   <Button
                     variant="outline"
@@ -442,7 +448,10 @@ export default function Records() {
                   <Calendar
                     mode="single"
                     selected={dateTo}
-                    onSelect={setDateTo}
+                    onSelect={(date) => {
+                      setDateTo(date);
+                      setIsToDateOpen(false);
+                    }}
                     initialFocus
                   />
                 </PopoverContent>

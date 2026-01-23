@@ -340,20 +340,18 @@ export default function Approvals() {
     }
   };
 
-  const filteredApprovals = pendingApprovals?.filter((approval) => {
-    if (
-      departmentFilter !== "all" &&
-      approval.departmentId !== departmentFilter
-    )
-      return false;
-    return true;
+  const allPendingItems: ApprovalItem[] = [
+    ...(pendingApprovals || []),
+    ...(pendingWithdrawals || []),
+  ].sort((a, b) => {
+    return (
+      new Date(b.createdAt || 0).getTime() -
+      new Date(a.createdAt || 0).getTime()
+    );
   });
 
-  const filteredWithdrawals = pendingWithdrawals?.filter((withdrawal) => {
-    if (
-      departmentFilter !== "all" &&
-      withdrawal.departmentId !== departmentFilter
-    )
+  const filteredItems = allPendingItems.filter((item) => {
+    if (departmentFilter !== "all" && item.departmentId !== departmentFilter)
       return false;
     return true;
   });
@@ -374,14 +372,12 @@ export default function Approvals() {
         <div>
           <h1 className="text-2xl font-bold">Pending Approvals</h1>
           <p className="text-muted-foreground">
-            Review and approve overtime hour submissions
+            Review and approve overtime hour submissions and withdrawals
           </p>
         </div>
         <Badge variant="secondary" className="text-lg px-4 py-2 gap-2">
           <Clock className="h-4 w-4" />
-          {(filteredApprovals?.length || 0) +
-            (filteredWithdrawals?.length || 0)}{" "}
-          Pending
+          {filteredItems.length} Pending
         </Badge>
       </div>
 
@@ -413,23 +409,20 @@ export default function Approvals() {
         <CardHeader>
           <CardTitle>Approval Queue</CardTitle>
           <CardDescription>
-            {filteredApprovals
-              ? `${filteredApprovals.length} submission${
-                  filteredApprovals.length !== 1 ? "s" : ""
-                } awaiting review`
-              : "Loading..."}
+            {filteredItems.length} request
+            {filteredItems.length !== 1 ? "s" : ""} awaiting review
           </CardDescription>
         </CardHeader>
         <CardContent>
           {isLoading ? (
             <TableSkeleton rows={5} columns={7} />
-          ) : filteredApprovals && filteredApprovals.length > 0 ? (
+          ) : filteredItems && filteredItems.length > 0 ? (
             <div className="overflow-x-auto">
               <table className="w-full">
                 <thead>
                   <tr className="border-b text-left">
                     <th className="py-3 px-4 text-sm font-medium text-muted-foreground uppercase tracking-wider">
-                      File
+                      Type
                     </th>
                     <th className="py-3 px-4 text-sm font-medium text-muted-foreground uppercase tracking-wider">
                       Employee
@@ -455,100 +448,79 @@ export default function Approvals() {
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredApprovals.map((approval) => {
-                    const attachments = approval.attachments
-                      ? (JSON.parse(approval.attachments) as AttachmentMeta[])
-                      : [];
+                  {filteredItems.map((item) => {
+                    const isWithdrawal = (item as any).amount !== undefined;
+                    const submission = item as HoursSubmission;
+                    const attachments =
+                      !isWithdrawal && submission.attachments
+                        ? (JSON.parse(
+                            submission.attachments,
+                          ) as AttachmentMeta[])
+                        : [];
                     const attachment = attachments[0];
                     const isImage = attachment?.mimeType?.startsWith("image/");
+
                     return (
                       <tr
-                        key={approval.id}
+                        key={item.id}
                         className="border-b last:border-0 hover-elevate"
-                        data-testid={`row-approval-${approval.id}`}
+                        data-testid={`row-approval-${item.id}`}
                       >
                         <td className="py-4 px-4 text-sm">
-                          {attachments.length > 0 ? (
-                            attachments.length > 1 ? (
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => {
-                                  setPreviewFiles(attachments);
-                                  setIsPreviewOpen(true);
-                                }}
-                              >
-                                {attachments.length} Files
-                              </Button>
-                            ) : isImage ? (
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setPreviewFiles([attachment]);
-                                  setIsPreviewOpen(true);
-                                }}
-                                className="rounded"
-                              >
-                                <img
-                                  src={attachment.url}
-                                  alt={attachment.originalName}
-                                  className="h-10 w-10 rounded object-cover"
-                                />
-                              </button>
-                            ) : (
-                              <a
-                                href={attachment.url}
-                                target="_blank"
-                                rel="noreferrer"
-                                className="text-primary hover:underline"
-                              >
-                                {attachment.originalName}
-                              </a>
-                            )
-                          ) : (
-                            "N/A"
-                          )}
+                          <Badge
+                            variant={isWithdrawal ? "outline" : "default"}
+                            className={
+                              isWithdrawal
+                                ? "text-amber-600 border-amber-200"
+                                : ""
+                            }
+                          >
+                            {isWithdrawal ? "Withdrawal" : "Submission"}
+                          </Badge>
                         </td>
                         <td className="py-4 px-4">
                           <div className="flex items-center gap-3">
                             <Avatar className="h-8 w-8">
                               <AvatarImage
                                 src={
-                                  approval.user?.profileImageUrl || undefined
+                                  (item as any).user?.profileImageUrl ||
+                                  undefined
                                 }
                               />
                               <AvatarFallback className="bg-primary/10 text-primary text-xs">
-                                {getInitials(approval.user)}
+                                {getInitials((item as any).user)}
                               </AvatarFallback>
                             </Avatar>
                             <div>
                               <p className="text-sm font-medium">
-                                {approval.user?.firstName &&
-                                approval.user?.lastName
-                                  ? `${approval.user.firstName} ${approval.user.lastName}`
-                                  : approval.user?.email || "Unknown"}
+                                {(item as any).user?.firstName &&
+                                (item as any).user?.lastName
+                                  ? `${(item as any).user.firstName} ${(item as any).user.lastName}`
+                                  : (item as any).user?.email || "Unknown"}
                               </p>
                             </div>
                           </div>
                         </td>
                         <td className="py-4 px-4 text-sm">
-                          {approval.department?.name || "N/A"}
+                          {(item as any).department?.name || "N/A"}
                         </td>
                         <td className="py-4 px-4 font-mono text-sm">
-                          {format(new Date(approval.date), "MMM dd, yyyy")}
+                          {format(new Date(item.date), "MMM dd, yyyy")}
                         </td>
                         <td className="py-4 px-4 font-mono text-sm font-medium">
-                          {approval.totalHours}h
+                          {isWithdrawal
+                            ? `-${(item as any).amount}h`
+                            : `+${submission.totalHours}h`}
                         </td>
                         <td className="py-4 px-4 text-sm text-muted-foreground max-w-xs truncate">
-                          {approval.notes || "-"}
+                          {(item as any).notes || (item as any).reason || "-"}
                         </td>
                         <td className="py-4 px-4 text-sm text-muted-foreground">
-                          {format(new Date(approval.createdAt!), "MMM dd")}
+                          {format(new Date(item.createdAt!), "MMM dd")}
                         </td>
                         <td className="py-4 px-4">
                           <div className="flex justify-end gap-2 flex-wrap">
-                            {approval.status === "escalated" ? (
+                            {item.status === "escalated" ? (
                               <>
                                 <Badge
                                   variant="outline"
@@ -557,15 +529,11 @@ export default function Approvals() {
                                   <AlertTriangle className="h-3.5 w-3.5" />
                                   Escalated
                                 </Badge>
-                                {/* Admin can still override escalated submissions */}
                                 <Button
                                   size="sm"
                                   variant="outline"
-                                  className="gap-1.5 text-purple-600 border-purple-200 hover:bg-purple-50 dark:text-purple-400 dark:border-purple-800 dark:hover:bg-purple-900/30"
-                                  onClick={() =>
-                                    handleAction(approval, "override")
-                                  }
-                                  data-testid={`button-override-${approval.id}`}
+                                  className="gap-1.5 text-purple-600 border-purple-200 hover:bg-purple-50"
+                                  onClick={() => handleAction(item, "override")}
                                 >
                                   <ShieldCheck className="h-4 w-4" />
                                   Override
@@ -576,11 +544,8 @@ export default function Approvals() {
                                 <Button
                                   size="sm"
                                   variant="outline"
-                                  className="gap-1.5 text-emerald-600 border-emerald-200 hover:bg-emerald-50 dark:text-emerald-400 dark:border-emerald-800 dark:hover:bg-emerald-900/30"
-                                  onClick={() =>
-                                    handleAction(approval, "approve")
-                                  }
-                                  data-testid={`button-approve-${approval.id}`}
+                                  className="gap-1.5 text-emerald-600 border-emerald-200 hover:bg-emerald-50"
+                                  onClick={() => handleAction(item, "approve")}
                                 >
                                   <CheckCircle className="h-4 w-4" />
                                   Approve
@@ -588,40 +553,25 @@ export default function Approvals() {
                                 <Button
                                   size="sm"
                                   variant="outline"
-                                  className="gap-1.5 text-red-600 border-red-200 hover:bg-red-50 dark:text-red-400 dark:border-red-800 dark:hover:bg-red-900/30"
-                                  onClick={() =>
-                                    handleAction(approval, "reject")
-                                  }
-                                  data-testid={`button-reject-${approval.id}`}
+                                  className="gap-1.5 text-red-600 border-red-200 hover:bg-red-50"
+                                  onClick={() => handleAction(item, "reject")}
                                 >
                                   <XCircle className="h-4 w-4" />
                                   Reject
                                 </Button>
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  className="gap-1.5 text-orange-600 border-orange-200 hover:bg-orange-50 dark:text-orange-400 dark:border-orange-800 dark:hover:bg-orange-900/30"
-                                  onClick={() =>
-                                    handleAction(approval, "escalate")
-                                  }
-                                  data-testid={`button-escalate-${approval.id}`}
-                                >
-                                  <AlertTriangle className="h-4 w-4" />
-                                  Escalate
-                                </Button>
-                                {/* NEW: Admin Override Button */}
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  className="gap-1.5 text-purple-600 border-purple-200 hover:bg-purple-50 dark:text-purple-400 dark:border-purple-800 dark:hover:bg-purple-900/30"
-                                  onClick={() =>
-                                    handleAction(approval, "override")
-                                  }
-                                  data-testid={`button-override-${approval.id}`}
-                                >
-                                  <ShieldCheck className="h-4 w-4" />
-                                  Override
-                                </Button>
+                                {!isWithdrawal && (
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    className="gap-1.5 text-orange-600 border-orange-200 hover:bg-orange-50"
+                                    onClick={() =>
+                                      handleAction(item, "escalate")
+                                    }
+                                  >
+                                    <AlertTriangle className="h-4 w-4" />
+                                    Escalate
+                                  </Button>
+                                )}
                               </>
                             )}
                           </div>
@@ -635,8 +585,8 @@ export default function Approvals() {
           ) : (
             <EmptyState
               icon={CheckSquare}
-              title="No pending approvals"
-              description="All submissions have been reviewed. Check back later for new requests."
+              title="No pending requests"
+              description="All submissions and withdrawals have been reviewed."
             />
           )}
         </CardContent>

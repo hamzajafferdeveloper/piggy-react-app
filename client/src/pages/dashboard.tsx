@@ -28,6 +28,10 @@ interface DashboardStats {
   totalHoursSubmitted: number;
   pendingCount: number;
   approvedThisMonth: number;
+  withdrawnThisMonth: number;
+  pendingSubmissionHours: number;
+  pendingWithdrawalHours: number;
+  hoursAvailable: number;
 }
 
 interface SubmissionWithDepartment extends HoursSubmission {
@@ -37,9 +41,16 @@ interface SubmissionWithDepartment extends HoursSubmission {
 export default function Dashboard() {
   const { user } = useAuth();
 
-  const { data: stats, isLoading: statsLoading } = useQuery<DashboardStats>({
+  const {
+    data: stats,
+    isLoading: statsLoading,
+    error: statsError,
+  } = useQuery<DashboardStats>({
     queryKey: ["/api/dashboard/stats"],
   });
+
+  console.log("Dashboard Stats:", stats);
+  if (statsError) console.error("Dashboard Stats Error:", statsError);
 
   const { data: balanceData, isLoading: balanceLoading } = useQuery<{
     currentBalance: number;
@@ -80,9 +91,10 @@ export default function Dashboard() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-        {statsLoading || balanceLoading ? (
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+        {statsLoading ? (
           <>
+            <StatCardSkeleton />
             <StatCardSkeleton />
             <StatCardSkeleton />
             <StatCardSkeleton />
@@ -90,23 +102,29 @@ export default function Dashboard() {
         ) : (
           <>
             <StatCard
-              title="Total Hours Submitted"
-              value={stats?.totalHoursSubmitted || 0}
+              title="Hours Available"
+              value={stats?.hoursAvailable ?? 0}
               icon={Clock}
-              description="All time submissions"
+              description="Current usable balance"
             />
             <StatCard
-              title="Pending Approvals"
-              value={stats?.pendingCount || 0}
+              title="Pending Submissions"
+              value={stats?.pendingSubmissionHours ?? 0}
               icon={FileText}
               description="Awaiting review"
             />
-            {/* <StatCard
-              title="Approved This Month"
-              value={stats?.approvedThisMonth || 0}
+            <StatCard
+              title="Pending Withdrawals"
+              value={stats?.pendingWithdrawalHours ?? 0}
+              icon={MinusCircle}
+              description="Withdrawn pending approval"
+            />
+            <StatCard
+              title="Withdrawn This Month"
+              value={stats?.withdrawnThisMonth ?? 0}
               icon={CheckCircle}
-              description="Current month"
-            /> */}
+              description="Approved this month"
+            />
           </>
         )}
       </div>

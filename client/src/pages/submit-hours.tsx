@@ -93,6 +93,7 @@ export default function SubmitHours() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [useTimeRange, setUseTimeRange] = useState(false);
+  const [isCalendarOpen, setIsCalendarOpen] = useState(false);
 
   const { data: departments, isLoading: departmentsLoading } = useQuery<
     Department[]
@@ -294,7 +295,10 @@ export default function SubmitHours() {
                       render={({ field }) => (
                         <FormItem className="flex flex-col">
                           <FormLabel>Date</FormLabel>
-                          <Popover>
+                          <Popover
+                            open={isCalendarOpen}
+                            onOpenChange={setIsCalendarOpen}
+                          >
                             <PopoverTrigger asChild>
                               <FormControl>
                                 <Button
@@ -316,7 +320,10 @@ export default function SubmitHours() {
                               <Calendar
                                 mode="single"
                                 selected={field.value}
-                                onSelect={field.onChange}
+                                onSelect={(date) => {
+                                  field.onChange(date);
+                                  setIsCalendarOpen(false);
+                                }}
                                 disabled={(date) => date > new Date()}
                                 initialFocus
                               />

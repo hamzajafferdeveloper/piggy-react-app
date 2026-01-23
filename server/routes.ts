@@ -138,11 +138,6 @@ export async function registerRoutes(
         status: "pending", // Force pending
       });
 
-      // Ensure departmentId is provided (schema should handle this, but explicit check good)
-      if (!req.body.departmentId) {
-        return res.status(400).json({ message: "Department ID is required" });
-      }
-
       // Validate time range if provided
       if (data.startTime && data.endTime) {
         // Basic validation that end time is after start time handled by frontend mostly,
@@ -748,10 +743,24 @@ export async function registerRoutes(
 
   app.get("/api/approvals/withdrawals", isAuthenticated, async (req, res) => {
     try {
-      const approverId = getUserId(req);
-      const pendingWithdrawals =
-        await storage.getPendingWithdrawalApprovals(approverId);
-      res.json(pendingWithdrawals);
+      const userId = getUserId(req);
+      let pendingWithdrawals: any[] = [];
+
+      if (await isAdmin(userId)) {
+        pendingWithdrawals = await storage.getAllPendingWithdrawals();
+      } else if (await isHR(userId)) {
+        // HR might only see escalated if that's the logic,
+        // but for now let's allow them to see all pending if that's the desired oversight
+        // or just mirror the submission logic if we add escalation to withdrawals.
+        pendingWithdrawals = await storage.getAllPendingWithdrawals();
+      } else if (await isApprover(userId)) {
+        pendingWithdrawals =
+          await storage.getPendingWithdrawalApprovals(userId);
+      }
+
+      // Filter out self-withdrawals
+      const filtered = pendingWithdrawals.filter((w) => w.userId !== userId);
+      res.json(filtered);
     } catch (error) {
       console.error("Error fetching pending withdrawal approvals:", error);
       res

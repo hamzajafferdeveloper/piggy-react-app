@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import { useLocation } from "wouter";
@@ -52,7 +53,6 @@ const formSchema = z
     useTimeRange: z.boolean().default(false),
     startTime: z.string().optional(),
     endTime: z.string().optional(),
-    departmentId: z.string({ required_error: "Please select a department" }),
   })
   .refine(
     (data) => {
@@ -76,12 +76,9 @@ export default function WithdrawHours() {
   const { toast } = useToast();
   const [, setLocation] = useLocation();
   const queryClient = useQueryClient();
+  const [isCalendarOpen, setIsCalendarOpen] = useState(false);
 
-  // Fetch departments
-  const { data: departments } = useQuery<Department[]>({
-    queryKey: ["/api/departments"],
-  });
-
+  // Fetch balance data
   const { data: balanceData } = useQuery<{ currentBalance: number }>({
     queryKey: ["/api/user/balance"],
   });
@@ -97,7 +94,6 @@ export default function WithdrawHours() {
       useTimeRange: false,
       startTime: "09:00",
       endTime: "17:00",
-      departmentId: "",
     },
   });
 
@@ -234,37 +230,6 @@ export default function WithdrawHours() {
 
               <FormField
                 control={form.control}
-                name="departmentId"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Department</FormLabel>
-                    <Select
-                      onValueChange={field.onChange}
-                      defaultValue={field.value}
-                    >
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select department for approval" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        {departments?.map((dept) => (
-                          <SelectItem key={dept.id} value={dept.id}>
-                            {dept.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <FormDescription>
-                      Select the department that will approve this withdrawal.
-                    </FormDescription>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={form.control}
                 name="amount"
                 render={({ field }) => (
                   <FormItem>
@@ -297,7 +262,10 @@ export default function WithdrawHours() {
                 render={({ field }) => (
                   <FormItem className="flex flex-col">
                     <FormLabel>Date used</FormLabel>
-                    <Popover>
+                    <Popover
+                      open={isCalendarOpen}
+                      onOpenChange={setIsCalendarOpen}
+                    >
                       <PopoverTrigger asChild>
                         <FormControl>
                           <Button
@@ -320,7 +288,10 @@ export default function WithdrawHours() {
                         <Calendar
                           mode="single"
                           selected={field.value}
-                          onSelect={field.onChange}
+                          onSelect={(date) => {
+                            field.onChange(date);
+                            setIsCalendarOpen(false);
+                          }}
                           disabled={(date) =>
                             date > new Date() || date < new Date("1900-01-01")
                           }
