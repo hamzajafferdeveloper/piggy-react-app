@@ -177,6 +177,18 @@ export interface IStorage {
     totalWithdrawn: number;
     currentBalance: number;
   }>;
+
+  approveWithdrawal(
+    id: string,
+    approverId: string,
+  ): Promise<HoursWithdrawal | undefined>;
+  rejectWithdrawal(
+    id: string,
+    approverId: string,
+    reason: string,
+  ): Promise<HoursWithdrawal | undefined>;
+
+  getPendingWithdrawalApprovals(approverId: string): Promise<any[]>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -245,7 +257,9 @@ export class DatabaseStorage implements IStorage {
   }
 
   // NEW: Withdrawals and Balance Logic
-  async createWithdrawal(data: InsertHoursWithdrawal): Promise<HoursWithdrawal> {
+  async createWithdrawal(
+    data: InsertHoursWithdrawal,
+  ): Promise<HoursWithdrawal> {
     const id = randomUUID();
     await db.insert(hoursWithdrawals).values({ ...data, id });
     const [withdrawal] = await db
@@ -261,6 +275,39 @@ export class DatabaseStorage implements IStorage {
       .from(hoursWithdrawals)
       .where(eq(hoursWithdrawals.userId, userId))
       .orderBy(desc(hoursWithdrawals.date));
+  }
+
+  async approveWithdrawal(
+    id: string,
+    approverId: string,
+  ): Promise<HoursWithdrawal | undefined> {
+    const [withdrawal] = await db
+      .update(hoursWithdrawals)
+      .set({ status: "approved" })
+      .where(eq(hoursWithdrawals.id, id));
+
+    const [updated] = await db
+      .select()
+      .from(hoursWithdrawals)
+      .where(eq(hoursWithdrawals.id, id));
+    return updated;
+  }
+
+  async rejectWithdrawal(
+    id: string,
+    approverId: string,
+    reason: string,
+  ): Promise<HoursWithdrawal | undefined> {
+    await db
+      .update(hoursWithdrawals)
+      .set({ status: "rejected", reason: reason }) // Store rejection reason in reason field
+      .where(eq(hoursWithdrawals.id, id));
+
+    const [updated] = await db
+      .select()
+      .from(hoursWithdrawals)
+      .where(eq(hoursWithdrawals.id, id));
+    return updated;
   }
 
   async getUserBalance(userId: string): Promise<{
@@ -279,13 +326,13 @@ export class DatabaseStorage implements IStorage {
       .where(
         and(
           eq(hoursSubmissions.userId, userId),
-          eq(hoursSubmissions.status, "approved")
-        )
+          eq(hoursSubmissions.status, "approved"),
+        ),
       );
 
     const totalDeposited = approvedSubmissions.reduce(
       (sum, sub) => sum + sub.totalHours,
-      0
+      0,
     );
 
     // 2. Calculate Total Withdrawn
@@ -294,7 +341,12 @@ export class DatabaseStorage implements IStorage {
         amount: hoursWithdrawals.amount,
       })
       .from(hoursWithdrawals)
-      .where(eq(hoursWithdrawals.userId, userId));
+      .where(
+        and(
+          eq(hoursWithdrawals.userId, userId),
+          eq(hoursWithdrawals.status, "approved"),
+        ),
+      );
 
     const totalWithdrawn = withdrawals.reduce((sum, w) => sum + w.amount, 0);
 

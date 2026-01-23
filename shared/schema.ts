@@ -123,7 +123,9 @@ export const submissionApprovers = mysqlTable("submission_approvers", {
 export const hoursWithdrawals = mysqlTable("hours_withdrawals", {
   id: varchar("id", { length: 36 }).primaryKey(),
   userId: varchar("user_id", { length: 36 }).notNull(),
+  departmentId: varchar("department_id", { length: 36 }).notNull(),
   amount: double("amount").notNull(),
+  status: varchar("status", { length: 20 }).notNull().default("pending"),
   startTime: text("start_time"),
   endTime: text("end_time"),
   reason: text("reason"),

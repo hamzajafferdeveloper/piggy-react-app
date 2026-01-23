@@ -1,7 +1,13 @@
 import { Badge } from "@/components/ui/badge";
-import { Clock, CheckCircle, XCircle, ArrowUpCircle } from "lucide-react";
+import {
+  Clock,
+  CheckCircle,
+  XCircle,
+  ArrowUpCircle,
+  MinusCircle,
+} from "lucide-react";
 
-type Status = "pending" | "approved" | "rejected" | "escalated";
+type Status = "pending" | "approved" | "rejected" | "escalated" | "withdrawn";
 
 interface StatusBadgeProps {
   status: Status;
@@ -32,6 +38,12 @@ const statusConfig = {
     icon: ArrowUpCircle,
     className:
       "bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-400 border-purple-200 dark:border-purple-800",
+  },
+  withdrawn: {
+    label: "Withdrawn",
+    icon: MinusCircle,
+    className:
+      "bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-400 border-orange-200 dark:border-orange-800",
   },
 };
 

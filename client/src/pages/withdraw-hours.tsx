@@ -14,6 +14,13 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
@@ -45,6 +52,7 @@ const formSchema = z
     useTimeRange: z.boolean().default(false),
     startTime: z.string().optional(),
     endTime: z.string().optional(),
+    departmentId: z.string({ required_error: "Please select a department" }),
   })
   .refine(
     (data) => {
@@ -61,10 +69,18 @@ const formSchema = z
 
 type FormData = z.infer<typeof formSchema>;
 
+// Import Department type
+import type { Department } from "@shared/schema";
+
 export default function WithdrawHours() {
   const { toast } = useToast();
   const [, setLocation] = useLocation();
   const queryClient = useQueryClient();
+
+  // Fetch departments
+  const { data: departments } = useQuery<Department[]>({
+    queryKey: ["/api/departments"],
+  });
 
   const { data: balanceData } = useQuery<{ currentBalance: number }>({
     queryKey: ["/api/user/balance"],
@@ -81,6 +97,7 @@ export default function WithdrawHours() {
       useTimeRange: false,
       startTime: "09:00",
       endTime: "17:00",
+      departmentId: "",
     },
   });
 
@@ -214,6 +231,37 @@ export default function WithdrawHours() {
                   />
                 </div>
               ) : null}
+
+              <FormField
+                control={form.control}
+                name="departmentId"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Department</FormLabel>
+                    <Select
+                      onValueChange={field.onChange}
+                      defaultValue={field.value}
+                    >
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select department for approval" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {departments?.map((dept) => (
+                          <SelectItem key={dept.id} value={dept.id}>
+                            {dept.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormDescription>
+                      Select the department that will approve this withdrawal.
+                    </FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
 
               <FormField
                 control={form.control}

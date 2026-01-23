@@ -36,7 +36,6 @@ import { EmptyState } from "@/components/empty-state";
 import { TableSkeleton } from "@/components/loading-skeleton";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
-import { format } from "date-fns";
 import {
   CalendarIcon,
   FileText,
@@ -46,11 +45,25 @@ import {
   X,
   RotateCcw,
 } from "lucide-react";
-import type { HoursSubmission, Department } from "@shared/schema";
+import { cn } from "@/lib/utils"; // Import cn
+import type {
+  HoursSubmission,
+  Department,
+  HoursWithdrawal,
+} from "@shared/schema";
 
 interface SubmissionWithDepartment extends HoursSubmission {
   department: Department;
+  type: "submission";
 }
+
+interface WithdrawalWithDetails extends HoursWithdrawal {
+  type: "withdrawal";
+  // Mock department for table consistency if needed, or handle undefined
+  department: undefined;
+}
+
+type RecordItem = SubmissionWithDepartment | WithdrawalWithDetails;
 
 type AttachmentMeta = {
   originalName: string;
@@ -60,6 +73,7 @@ type AttachmentMeta = {
   size: number;
 };
 import { FilePreviewModal } from "@/components/file-preview-modal"; // Added import
+import { format } from "date-fns";
 
 type StatusFilter = "all" | "pending" | "approved" | "rejected";
 type ActionType = "edit" | "cancel" | null;
@@ -90,11 +104,28 @@ export default function Records() {
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
   const [cancelReason, setCancelReason] = useState("");
 
-  const { data: submissions, isLoading } = useQuery<SubmissionWithDepartment[]>(
-    {
-      queryKey: ["/api/submissions"],
-    },
-  );
+  const { data: submissions, isLoading: submissionsLoading } = useQuery<
+    SubmissionWithDepartment[]
+  >({
+    queryKey: ["/api/submissions"],
+  });
+
+  const { data: withdrawals, isLoading: withdrawalsLoading } = useQuery<
+    HoursWithdrawal[]
+  >({
+    queryKey: ["/api/withdrawals"],
+  });
+
+  const allRecords: RecordItem[] = [
+    ...(submissions?.map((s) => ({ ...s, type: "submission" as const })) || []),
+    ...(withdrawals?.map((w) => ({
+      ...w,
+      type: "withdrawal" as const,
+      department: undefined,
+    })) || []),
+  ].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
+  const isLoading = submissionsLoading || withdrawalsLoading;
 
   const { data: departments } = useQuery<Department[]>({
     queryKey: ["/api/departments"],
@@ -247,16 +278,19 @@ export default function Records() {
     }
   };
 
-  const filteredSubmissions = submissions?.filter((submission) => {
-    if (statusFilter !== "all" && submission.status !== statusFilter)
-      return false;
-    if (
-      departmentFilter !== "all" &&
-      submission.departmentId !== departmentFilter
-    )
-      return false;
-    if (dateFrom && new Date(submission.date) < dateFrom) return false;
-    if (dateTo && new Date(submission.date) > dateTo) return false;
+  const filteredSubmissions = allRecords?.filter((record) => {
+    // Determine status for record
+    record.status;
+
+    if (statusFilter !== "all" && recordStatus !== statusFilter) return false;
+
+    if (departmentFilter !== "all") {
+      if (record.type === "withdrawal") return false; // Withdrawals don't have depts usually
+      if (record.departmentId !== departmentFilter) return false;
+    }
+
+    if (dateFrom && new Date(record.date) < dateFrom) return false;
+    if (dateTo && new Date(record.date) > dateTo) return false;
     return true;
   });
 
@@ -273,10 +307,12 @@ export default function Records() {
     ];
     const rows = filteredSubmissions.map((s) => [
       format(new Date(s.date), "yyyy-MM-dd"),
-      s.department?.name || "N/A",
-      s.totalHours.toString(),
+      (s.type === "submission" ? s.department?.name : "Withdrawal") || "-",
+      s.type === "submission"
+        ? s.totalHours.toString()
+        : (s as any).amount.toString(), // Handle withdrawal amount
       s.status,
-      s.notes || "",
+      (s.type === "submission" ? s.notes : (s as any).reason) || "",
       format(new Date(s.createdAt!), "yyyy-MM-dd HH:mm"),
     ]);
 
@@ -340,6 +376,7 @@ export default function Records() {
                   <SelectItem value="pending">Pending</SelectItem>
                   <SelectItem value="approved">Approved</SelectItem>
                   <SelectItem value="rejected">Rejected</SelectItem>
+                  <SelectItem value="withdrawn">Withdrawn</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -472,20 +509,32 @@ export default function Records() {
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredSubmissions.map((submission) => {
-                    const attachments = submission.attachments
-                      ? (JSON.parse(submission.attachments) as AttachmentMeta[])
-                      : [];
+                  {filteredSubmissions.map((record) => {
+                    const isSubmission = record.type === "submission";
+                    const attachments =
+                      isSubmission && record.attachments
+                        ? (JSON.parse(record.attachments) as AttachmentMeta[])
+                        : [];
                     const attachment = attachments[0];
                     const isImage = attachment?.mimeType?.startsWith("image/");
+
+                    // For withdrawals, handle amount display
+                    const hoursDisplay = isSubmission
+                      ? `${record.totalHours}h`
+                      : `-${(record as any).amount}h`;
+
+                    const notes = isSubmission
+                      ? record.notes
+                      : (record as any).reason;
+
                     return (
                       <tr
-                        key={submission.id}
+                        key={`${record.type}-${record.id}`}
                         className="border-b last:border-0 hover-elevate"
-                        data-testid={`row-record-${submission.id}`}
+                        data-testid={`row-record-${record.id}`}
                       >
                         <td className="py-4 px-4 text-sm">
-                          {attachments.length > 0 ? (
+                          {isSubmission && attachments.length > 0 ? (
                             attachments.length > 1 ? (
                               <Button
                                 variant="outline"
@@ -523,42 +572,59 @@ export default function Records() {
                               </a>
                             )
                           ) : (
-                            "N/A"
+                            <span className="text-muted-foreground">-</span>
                           )}
                         </td>
                         <td className="py-4 px-4 font-mono text-sm">
-                          {format(new Date(submission.date), "MMM dd, yyyy")}
+                          {format(new Date(record.date), "MMM dd, yyyy")}
                         </td>
                         <td className="py-4 px-4 text-sm">
-                          {submission.department?.name || "N/A"}
+                          {isSubmission ? (
+                            record.department?.name || "N/A"
+                          ) : (
+                            <span className="text-orange-600 font-medium">
+                              Withdrawal
+                            </span>
+                          )}
                         </td>
                         <td className="py-4 px-4 text-sm text-muted-foreground">
-                          {submission.startTime && submission.endTime
-                            ? `${submission.startTime} - ${submission.endTime}`
-                            : "-"}
+                          {isSubmission && record.startTime && record.endTime
+                            ? `${record.startTime} - ${record.endTime}`
+                            : (record as any).startTime &&
+                                (record as any).endTime
+                              ? `${(record as any).startTime} - ${
+                                  (record as any).endTime
+                                }`
+                              : "-"}
                         </td>
-                        <td className="py-4 px-4 font-mono text-sm font-medium">
-                          {submission.totalHours}h
+                        <td
+                          className={cn(
+                            "py-4 px-4 font-mono text-sm font-medium",
+                            !isSubmission && "text-red-500",
+                          )}
+                        >
+                          {hoursDisplay}
                         </td>
                         <td className="py-4 px-4">
-                          <StatusBadge status={submission.status} />
+                          <StatusBadge
+                            status={isSubmission ? record.status : "withdrawn"}
+                          />
                         </td>
                         <td className="py-4 px-4 text-sm text-muted-foreground max-w-xs truncate">
-                          {submission.notes || "-"}
+                          {notes || "-"}
                         </td>
                         <td className="py-4 px-4">
                           <div className="flex justify-end gap-2">
-                            {submission.status === "pending" &&
-                              !submission.isCancelled && (
+                            {isSubmission &&
+                              record.status === "pending" &&
+                              !record.isCancelled && (
                                 <>
                                   <Button
                                     size="sm"
                                     variant="outline"
                                     className="gap-1.5"
-                                    onClick={() =>
-                                      handleAction(submission, "edit")
-                                    }
-                                    data-testid={`button-edit-${submission.id}`}
+                                    onClick={() => handleAction(record, "edit")}
+                                    data-testid={`button-edit-${record.id}`}
                                   >
                                     <Edit className="h-4 w-4" />
                                     Edit
@@ -568,16 +634,16 @@ export default function Records() {
                                     variant="outline"
                                     className="gap-1.5 text-red-600 border-red-200 hover:bg-red-50"
                                     onClick={() =>
-                                      handleAction(submission, "cancel")
+                                      handleAction(record, "cancel")
                                     }
-                                    data-testid={`button-cancel-${submission.id}`}
+                                    data-testid={`button-cancel-${record.id}`}
                                   >
                                     <X className="h-4 w-4" />
                                     Cancel
                                   </Button>
                                 </>
                               )}
-                            {submission.isCancelled && (
+                            {isSubmission && record.isCancelled && (
                               <span className="text-sm text-muted-foreground">
                                 Cancelled
                               </span>

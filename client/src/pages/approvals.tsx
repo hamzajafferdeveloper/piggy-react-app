@@ -24,6 +24,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { StatusBadge } from "@/components/status-badge";
@@ -44,6 +45,7 @@ import {
 } from "lucide-react";
 import type {
   HoursSubmission,
+  HoursWithdrawal,
   Department,
   User as UserType,
 } from "@shared/schema";
@@ -52,6 +54,13 @@ interface SubmissionWithDetails extends HoursSubmission {
   department: Department;
   user: UserType;
 }
+
+interface WithdrawalWithDetails extends HoursWithdrawal {
+  user: UserType;
+  department?: Department;
+}
+
+type ApprovalItem = SubmissionWithDetails | WithdrawalWithDetails;
 
 type AttachmentMeta = {
   originalName: string;
@@ -66,7 +75,7 @@ export default function Approvals() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [selectedSubmission, setSelectedSubmission] =
-    useState<SubmissionWithDetails | null>(null);
+    useState<ApprovalItem | null>(null);
   const [comment, setComment] = useState("");
   const [actionType, setActionType] = useState<
     "approve" | "reject" | "escalate" | "override" | null
@@ -78,14 +87,74 @@ export default function Approvals() {
   const [previewFiles, setPreviewFiles] = useState<AttachmentMeta[]>([]);
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
 
-  const { data: pendingApprovals, isLoading } = useQuery<
+  const { data: pendingApprovals, isLoading: submissionsLoading } = useQuery<
     SubmissionWithDetails[]
   >({
     queryKey: ["/api/approvals/pending"],
   });
 
+  const { data: pendingWithdrawals, isLoading: withdrawalsLoading } = useQuery<
+    WithdrawalWithDetails[]
+  >({
+    queryKey: ["/api/approvals/withdrawals"],
+  });
+
+  const isLoading = submissionsLoading || withdrawalsLoading;
+
   const { data: departments } = useQuery<Department[]>({
     queryKey: ["/api/departments"],
+  });
+
+  const approveWithdrawalMutation = useMutation({
+    mutationFn: async ({ id }: { id: string }) => {
+      return apiRequest("POST", `/api/withdrawals/${id}/approve`, {});
+    },
+    onSuccess: () => {
+      toast({
+        title: "Success",
+        description: "Withdrawal approved successfully.",
+      });
+      queryClient.invalidateQueries({
+        queryKey: ["/api/approvals/withdrawals"],
+      });
+      queryClient.invalidateQueries({ queryKey: ["/api/dashboard/stats"] });
+      setSelectedSubmission(null);
+      setActionType(null);
+      setComment("");
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to approve withdrawal.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const rejectWithdrawalMutation = useMutation({
+    mutationFn: async ({ id, reason }: { id: string; reason: string }) => {
+      return apiRequest("POST", `/api/withdrawals/${id}/reject`, { reason });
+    },
+    onSuccess: () => {
+      toast({
+        title: "Success",
+        description: "Withdrawal rejected successfully.",
+      });
+      queryClient.invalidateQueries({
+        queryKey: ["/api/approvals/withdrawals"],
+      });
+      queryClient.invalidateQueries({ queryKey: ["/api/dashboard/stats"] });
+      setSelectedSubmission(null);
+      setActionType(null);
+      setComment("");
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to rejection withdrawal.",
+        variant: "destructive",
+      });
+    },
   });
 
   const approveMutation = useMutation({
@@ -200,7 +269,7 @@ export default function Approvals() {
   });
 
   const handleAction = (
-    submission: SubmissionWithDetails,
+    submission: ApprovalItem,
     action: "approve" | "reject" | "escalate" | "override",
   ) => {
     setSelectedSubmission(submission);
@@ -250,11 +319,24 @@ export default function Approvals() {
         reason: comment.trim(),
       });
     } else {
-      approveMutation.mutate({
-        id: selectedSubmission.id,
-        status: actionType === "approve" ? "approved" : "rejected",
-        comment: comment.trim() || undefined,
-      });
+      // Check if it's a withdrawal or submission (using basic check for now, can improve)
+      if ((selectedSubmission as any).amount !== undefined) {
+        // It's a withdrawal
+        if (actionType === "approve") {
+          approveWithdrawalMutation.mutate({ id: selectedSubmission.id });
+        } else {
+          rejectWithdrawalMutation.mutate({
+            id: selectedSubmission.id,
+            reason: comment.trim(),
+          });
+        }
+      } else {
+        approveMutation.mutate({
+          id: selectedSubmission.id,
+          status: actionType === "approve" ? "approved" : "rejected",
+          comment: comment.trim() || undefined,
+        });
+      }
     }
   };
 
@@ -262,6 +344,15 @@ export default function Approvals() {
     if (
       departmentFilter !== "all" &&
       approval.departmentId !== departmentFilter
+    )
+      return false;
+    return true;
+  });
+
+  const filteredWithdrawals = pendingWithdrawals?.filter((withdrawal) => {
+    if (
+      departmentFilter !== "all" &&
+      withdrawal.departmentId !== departmentFilter
     )
       return false;
     return true;
@@ -288,7 +379,9 @@ export default function Approvals() {
         </div>
         <Badge variant="secondary" className="text-lg px-4 py-2 gap-2">
           <Clock className="h-4 w-4" />
-          {filteredApprovals?.length || 0} Pending
+          {(filteredApprovals?.length || 0) +
+            (filteredWithdrawals?.length || 0)}{" "}
+          Pending
         </Badge>
       </div>
 
@@ -602,19 +695,30 @@ export default function Approvals() {
                 <div>
                   <p className="text-muted-foreground">Hours</p>
                   <p className="font-medium font-mono">
-                    {selectedSubmission.totalHours}h
+                    {(selectedSubmission as any).totalHours
+                      ? `${(selectedSubmission as any).totalHours}h`
+                      : `${(selectedSubmission as any).amount}h`}
                   </p>
                 </div>
               </div>
 
-              {selectedSubmission.notes && (
+              {(selectedSubmission as any).notes && (
                 <div>
                   <p className="text-sm text-muted-foreground mb-1">Notes</p>
                   <p className="text-sm bg-muted p-3 rounded-md">
-                    {selectedSubmission.notes}
+                    {(selectedSubmission as any).notes}
                   </p>
                 </div>
               )}
+              {(selectedSubmission as any).reason &&
+                !(selectedSubmission as any).notes && (
+                  <div>
+                    <p className="text-sm text-muted-foreground mb-1">Reason</p>
+                    <p className="text-sm bg-muted p-3 rounded-md">
+                      {(selectedSubmission as any).reason}
+                    </p>
+                  </div>
+                )}
 
               {actionType === "override" && (
                 <div>
@@ -686,7 +790,9 @@ export default function Approvals() {
               disabled={
                 approveMutation.isPending ||
                 escalateMutation.isPending ||
-                overrideMutation.isPending
+                overrideMutation.isPending ||
+                approveWithdrawalMutation.isPending ||
+                rejectWithdrawalMutation.isPending
               }
               variant={
                 actionType === "approve"
@@ -699,7 +805,9 @@ export default function Approvals() {
             >
               {approveMutation.isPending ||
               escalateMutation.isPending ||
-              overrideMutation.isPending
+              overrideMutation.isPending ||
+              approveWithdrawalMutation.isPending ||
+              rejectWithdrawalMutation.isPending
                 ? "Processing..."
                 : actionType === "approve"
                   ? "Confirm Approval"
