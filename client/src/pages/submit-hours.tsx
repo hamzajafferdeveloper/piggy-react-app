@@ -55,7 +55,7 @@ const formSchema = z
     endTime: z.string().optional(),
     totalHours: z.coerce.number().min(0.5).max(24),
     notes: z.string().optional(),
-    file: z.instanceof(File).optional(),
+    files: z.array(z.instanceof(File)).optional(),
   })
   .refine(
     (data) => {
@@ -184,8 +184,10 @@ export default function SubmitHours() {
       if (data.endTime) formData.append("endTime", data.endTime);
       if (data.notes) formData.append("notes", data.notes);
 
-      if (data.file) {
-        formData.append("files", data.file);
+      if (data.files && data.files.length > 0) {
+        data.files.forEach((file) => {
+          formData.append("files", file);
+        });
       }
 
       const response = await fetch("/api/submissions", {
@@ -409,16 +411,17 @@ export default function SubmitHours() {
 
                   <FormField
                     control={form.control}
-                    name="file"
+                    name="files"
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel>Attachments (Optional)</FormLabel>
                         <FormControl>
                           <Input
                             type="file"
+                            multiple
                             onChange={(e) => {
-                              const [file] = Array.from(e.target.files || []);
-                              field.onChange(file);
+                              const files = Array.from(e.target.files || []);
+                              field.onChange(files);
                             }}
                             data-testid="input-files"
                           />

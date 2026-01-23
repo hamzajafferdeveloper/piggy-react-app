@@ -60,6 +60,7 @@ type AttachmentMeta = {
   mimeType: string;
   size: number;
 };
+import { FilePreviewModal } from "@/components/file-preview-modal";
 
 export default function Approvals() {
   const { toast } = useToast();
@@ -71,10 +72,11 @@ export default function Approvals() {
     "approve" | "reject" | "escalate" | "override" | null
   >(null);
   const [overrideStatus, setOverrideStatus] = useState<"approved" | "rejected">(
-    "approved"
+    "approved",
   );
   const [departmentFilter, setDepartmentFilter] = useState<string>("all");
-  const [previewImage, setPreviewImage] = useState<AttachmentMeta | null>(null);
+  const [previewFiles, setPreviewFiles] = useState<AttachmentMeta[]>([]);
+  const [isPreviewOpen, setIsPreviewOpen] = useState(false);
 
   const { data: pendingApprovals, isLoading } = useQuery<
     SubmissionWithDetails[]
@@ -199,7 +201,7 @@ export default function Approvals() {
 
   const handleAction = (
     submission: SubmissionWithDetails,
-    action: "approve" | "reject" | "escalate" | "override"
+    action: "approve" | "reject" | "escalate" | "override",
   ) => {
     setSelectedSubmission(submission);
     setActionType(action);
@@ -367,154 +369,172 @@ export default function Approvals() {
                     const attachment = attachments[0];
                     const isImage = attachment?.mimeType?.startsWith("image/");
                     return (
-                    <tr
-                      key={approval.id}
-                      className="border-b last:border-0 hover-elevate"
-                      data-testid={`row-approval-${approval.id}`}
-                    >
-                      <td className="py-4 px-4 text-sm">
-                        {attachment ? (
-                          isImage ? (
-                            <button
-                              type="button"
-                              onClick={() => setPreviewImage(attachment)}
-                              className="rounded"
-                            >
-                              <img
-                                src={attachment.url}
-                                alt={attachment.originalName}
-                                className="h-10 w-10 rounded object-cover"
-                              />
-                            </button>
+                      <tr
+                        key={approval.id}
+                        className="border-b last:border-0 hover-elevate"
+                        data-testid={`row-approval-${approval.id}`}
+                      >
+                        <td className="py-4 px-4 text-sm">
+                          {attachments.length > 0 ? (
+                            attachments.length > 1 ? (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => {
+                                  setPreviewFiles(attachments);
+                                  setIsPreviewOpen(true);
+                                }}
+                              >
+                                {attachments.length} Files
+                              </Button>
+                            ) : isImage ? (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setPreviewFiles([attachment]);
+                                  setIsPreviewOpen(true);
+                                }}
+                                className="rounded"
+                              >
+                                <img
+                                  src={attachment.url}
+                                  alt={attachment.originalName}
+                                  className="h-10 w-10 rounded object-cover"
+                                />
+                              </button>
+                            ) : (
+                              <a
+                                href={attachment.url}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="text-primary hover:underline"
+                              >
+                                {attachment.originalName}
+                              </a>
+                            )
                           ) : (
-                            <a
-                              href={attachment.url}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="text-primary hover:underline"
-                            >
-                              {attachment.originalName}
-                            </a>
-                          )
-                        ) : (
-                          "N/A"
-                        )}
-                      </td>
-                      <td className="py-4 px-4">
-                        <div className="flex items-center gap-3">
-                          <Avatar className="h-8 w-8">
-                            <AvatarImage
-                              src={approval.user?.profileImageUrl || undefined}
-                            />
-                            <AvatarFallback className="bg-primary/10 text-primary text-xs">
-                              {getInitials(approval.user)}
-                            </AvatarFallback>
-                          </Avatar>
-                          <div>
-                            <p className="text-sm font-medium">
-                              {approval.user?.firstName &&
-                              approval.user?.lastName
-                                ? `${approval.user.firstName} ${approval.user.lastName}`
-                                : approval.user?.email || "Unknown"}
-                            </p>
-                          </div>
-                        </div>
-                      </td>
-                      <td className="py-4 px-4 text-sm">
-                        {approval.department?.name || "N/A"}
-                      </td>
-                      <td className="py-4 px-4 font-mono text-sm">
-                        {format(new Date(approval.date), "MMM dd, yyyy")}
-                      </td>
-                      <td className="py-4 px-4 font-mono text-sm font-medium">
-                        {approval.totalHours}h
-                      </td>
-                      <td className="py-4 px-4 text-sm text-muted-foreground max-w-xs truncate">
-                        {approval.notes || "-"}
-                      </td>
-                      <td className="py-4 px-4 text-sm text-muted-foreground">
-                        {format(new Date(approval.createdAt!), "MMM dd")}
-                      </td>
-                      <td className="py-4 px-4">
-                        <div className="flex justify-end gap-2 flex-wrap">
-                          {approval.status === "escalated" ? (
-                            <>
-                              <Badge
-                                variant="outline"
-                                className="bg-orange-50 text-orange-700 border-orange-200 gap-1.5"
-                              >
-                                <AlertTriangle className="h-3.5 w-3.5" />
-                                Escalated
-                              </Badge>
-                              {/* Admin can still override escalated submissions */}
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                className="gap-1.5 text-purple-600 border-purple-200 hover:bg-purple-50 dark:text-purple-400 dark:border-purple-800 dark:hover:bg-purple-900/30"
-                                onClick={() =>
-                                  handleAction(approval, "override")
-                                }
-                                data-testid={`button-override-${approval.id}`}
-                              >
-                                <ShieldCheck className="h-4 w-4" />
-                                Override
-                              </Button>
-                            </>
-                          ) : (
-                            <>
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                className="gap-1.5 text-emerald-600 border-emerald-200 hover:bg-emerald-50 dark:text-emerald-400 dark:border-emerald-800 dark:hover:bg-emerald-900/30"
-                                onClick={() =>
-                                  handleAction(approval, "approve")
-                                }
-                                data-testid={`button-approve-${approval.id}`}
-                              >
-                                <CheckCircle className="h-4 w-4" />
-                                Approve
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                className="gap-1.5 text-red-600 border-red-200 hover:bg-red-50 dark:text-red-400 dark:border-red-800 dark:hover:bg-red-900/30"
-                                onClick={() => handleAction(approval, "reject")}
-                                data-testid={`button-reject-${approval.id}`}
-                              >
-                                <XCircle className="h-4 w-4" />
-                                Reject
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                className="gap-1.5 text-orange-600 border-orange-200 hover:bg-orange-50 dark:text-orange-400 dark:border-orange-800 dark:hover:bg-orange-900/30"
-                                onClick={() =>
-                                  handleAction(approval, "escalate")
-                                }
-                                data-testid={`button-escalate-${approval.id}`}
-                              >
-                                <AlertTriangle className="h-4 w-4" />
-                                Escalate
-                              </Button>
-                              {/* NEW: Admin Override Button */}
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                className="gap-1.5 text-purple-600 border-purple-200 hover:bg-purple-50 dark:text-purple-400 dark:border-purple-800 dark:hover:bg-purple-900/30"
-                                onClick={() =>
-                                  handleAction(approval, "override")
-                                }
-                                data-testid={`button-override-${approval.id}`}
-                              >
-                                <ShieldCheck className="h-4 w-4" />
-                                Override
-                              </Button>
-                            </>
+                            "N/A"
                           )}
-                        </div>
-                      </td>
-                    </tr>
-                  );
+                        </td>
+                        <td className="py-4 px-4">
+                          <div className="flex items-center gap-3">
+                            <Avatar className="h-8 w-8">
+                              <AvatarImage
+                                src={
+                                  approval.user?.profileImageUrl || undefined
+                                }
+                              />
+                              <AvatarFallback className="bg-primary/10 text-primary text-xs">
+                                {getInitials(approval.user)}
+                              </AvatarFallback>
+                            </Avatar>
+                            <div>
+                              <p className="text-sm font-medium">
+                                {approval.user?.firstName &&
+                                approval.user?.lastName
+                                  ? `${approval.user.firstName} ${approval.user.lastName}`
+                                  : approval.user?.email || "Unknown"}
+                              </p>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="py-4 px-4 text-sm">
+                          {approval.department?.name || "N/A"}
+                        </td>
+                        <td className="py-4 px-4 font-mono text-sm">
+                          {format(new Date(approval.date), "MMM dd, yyyy")}
+                        </td>
+                        <td className="py-4 px-4 font-mono text-sm font-medium">
+                          {approval.totalHours}h
+                        </td>
+                        <td className="py-4 px-4 text-sm text-muted-foreground max-w-xs truncate">
+                          {approval.notes || "-"}
+                        </td>
+                        <td className="py-4 px-4 text-sm text-muted-foreground">
+                          {format(new Date(approval.createdAt!), "MMM dd")}
+                        </td>
+                        <td className="py-4 px-4">
+                          <div className="flex justify-end gap-2 flex-wrap">
+                            {approval.status === "escalated" ? (
+                              <>
+                                <Badge
+                                  variant="outline"
+                                  className="bg-orange-50 text-orange-700 border-orange-200 gap-1.5"
+                                >
+                                  <AlertTriangle className="h-3.5 w-3.5" />
+                                  Escalated
+                                </Badge>
+                                {/* Admin can still override escalated submissions */}
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="gap-1.5 text-purple-600 border-purple-200 hover:bg-purple-50 dark:text-purple-400 dark:border-purple-800 dark:hover:bg-purple-900/30"
+                                  onClick={() =>
+                                    handleAction(approval, "override")
+                                  }
+                                  data-testid={`button-override-${approval.id}`}
+                                >
+                                  <ShieldCheck className="h-4 w-4" />
+                                  Override
+                                </Button>
+                              </>
+                            ) : (
+                              <>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="gap-1.5 text-emerald-600 border-emerald-200 hover:bg-emerald-50 dark:text-emerald-400 dark:border-emerald-800 dark:hover:bg-emerald-900/30"
+                                  onClick={() =>
+                                    handleAction(approval, "approve")
+                                  }
+                                  data-testid={`button-approve-${approval.id}`}
+                                >
+                                  <CheckCircle className="h-4 w-4" />
+                                  Approve
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="gap-1.5 text-red-600 border-red-200 hover:bg-red-50 dark:text-red-400 dark:border-red-800 dark:hover:bg-red-900/30"
+                                  onClick={() =>
+                                    handleAction(approval, "reject")
+                                  }
+                                  data-testid={`button-reject-${approval.id}`}
+                                >
+                                  <XCircle className="h-4 w-4" />
+                                  Reject
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="gap-1.5 text-orange-600 border-orange-200 hover:bg-orange-50 dark:text-orange-400 dark:border-orange-800 dark:hover:bg-orange-900/30"
+                                  onClick={() =>
+                                    handleAction(approval, "escalate")
+                                  }
+                                  data-testid={`button-escalate-${approval.id}`}
+                                >
+                                  <AlertTriangle className="h-4 w-4" />
+                                  Escalate
+                                </Button>
+                                {/* NEW: Admin Override Button */}
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="gap-1.5 text-purple-600 border-purple-200 hover:bg-purple-50 dark:text-purple-400 dark:border-purple-800 dark:hover:bg-purple-900/30"
+                                  onClick={() =>
+                                    handleAction(approval, "override")
+                                  }
+                                  data-testid={`button-override-${approval.id}`}
+                                >
+                                  <ShieldCheck className="h-4 w-4" />
+                                  Override
+                                </Button>
+                              </>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    );
                   })}
                 </tbody>
               </table>
@@ -539,19 +559,19 @@ export default function Approvals() {
               {actionType === "approve"
                 ? "Approve Submission"
                 : actionType === "reject"
-                ? "Reject Submission"
-                : actionType === "override"
-                ? "Admin Override"
-                : "Escalate Submission"}
+                  ? "Reject Submission"
+                  : actionType === "override"
+                    ? "Admin Override"
+                    : "Escalate Submission"}
             </DialogTitle>
             <DialogDescription>
               {actionType === "approve"
                 ? "Confirm approval of this overtime submission."
                 : actionType === "reject"
-                ? "Please provide a reason for rejection."
-                : actionType === "override"
-                ? "Override this submission with admin authority. This action is irreversible and will be audited."
-                : "Escalate this request to HR or Admin for review."}
+                  ? "Please provide a reason for rejection."
+                  : actionType === "override"
+                    ? "Override this submission with admin authority. This action is irreversible and will be audited."
+                    : "Escalate this request to HR or Admin for review."}
             </DialogDescription>
           </DialogHeader>
 
@@ -623,10 +643,10 @@ export default function Approvals() {
                   {actionType === "approve"
                     ? "Comment (Optional)"
                     : actionType === "reject"
-                    ? "Reason for Rejection (Required)"
-                    : actionType === "override"
-                    ? "Override Reason (Required, min 10 chars)"
-                    : "Reason for Escalation (Required)"}
+                      ? "Reason for Rejection (Required)"
+                      : actionType === "override"
+                        ? "Override Reason (Required, min 10 chars)"
+                        : "Reason for Escalation (Required)"}
                 </label>
                 <Textarea
                   value={comment}
@@ -635,10 +655,10 @@ export default function Approvals() {
                     actionType === "approve"
                       ? "Add an optional comment..."
                       : actionType === "reject"
-                      ? "Please provide a reason for rejection..."
-                      : actionType === "override"
-                      ? "Provide a detailed reason for this override (minimum 10 characters)..."
-                      : "Please provide a reason for escalation..."
+                        ? "Please provide a reason for rejection..."
+                        : actionType === "override"
+                          ? "Provide a detailed reason for this override (minimum 10 characters)..."
+                          : "Please provide a reason for escalation..."
                   }
                   className="mt-2"
                   rows={actionType === "override" ? 4 : 3}
@@ -672,8 +692,8 @@ export default function Approvals() {
                 actionType === "approve"
                   ? "default"
                   : actionType === "override"
-                  ? "default"
-                  : "destructive"
+                    ? "default"
+                    : "destructive"
               }
               data-testid="button-confirm-action"
             >
@@ -682,37 +702,22 @@ export default function Approvals() {
               overrideMutation.isPending
                 ? "Processing..."
                 : actionType === "approve"
-                ? "Confirm Approval"
-                : actionType === "reject"
-                ? "Confirm Rejection"
-                : actionType === "override"
-                ? "Confirm Override"
-                : "Confirm Escalation"}
+                  ? "Confirm Approval"
+                  : actionType === "reject"
+                    ? "Confirm Rejection"
+                    : actionType === "override"
+                      ? "Confirm Override"
+                      : "Confirm Escalation"}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      <Dialog
-        open={!!previewImage}
-        onOpenChange={(open) => {
-          if (!open) setPreviewImage(null);
-        }}
-      >
-        <DialogContent className="max-w-3xl">
-          <DialogHeader>
-            <DialogTitle>{previewImage?.originalName}</DialogTitle>
-            <DialogDescription>Preview attachment</DialogDescription>
-          </DialogHeader>
-          {previewImage && (
-            <img
-              src={previewImage.url}
-              alt={previewImage.originalName}
-              className="max-h-[70vh] w-full rounded object-contain"
-            />
-          )}
-        </DialogContent>
-      </Dialog>
+      <FilePreviewModal
+        isOpen={isPreviewOpen}
+        onClose={() => setIsPreviewOpen(false)}
+        files={previewFiles}
+      />
     </div>
   );
 }

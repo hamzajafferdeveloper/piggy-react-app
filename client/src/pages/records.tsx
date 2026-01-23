@@ -59,6 +59,7 @@ type AttachmentMeta = {
   mimeType: string;
   size: number;
 };
+import { FilePreviewModal } from "@/components/file-preview-modal"; // Added import
 
 type StatusFilter = "all" | "pending" | "approved" | "rejected";
 type ActionType = "edit" | "cancel" | null;
@@ -80,12 +81,13 @@ export default function Records() {
     startTime: "",
     endTime: "",
   });
-  const [existingAttachments, setExistingAttachments] = useState<AttachmentMeta[]>(
-    [],
-  );
+  const [existingAttachments, setExistingAttachments] = useState<
+    AttachmentMeta[]
+  >([]);
   const [removedAttachments, setRemovedAttachments] = useState<string[]>([]);
-  const [newFile, setNewFile] = useState<File | null>(null);
-  const [previewImage, setPreviewImage] = useState<AttachmentMeta | null>(null);
+  const [newFiles, setNewFiles] = useState<File[]>([]);
+  const [previewFiles, setPreviewFiles] = useState<AttachmentMeta[]>([]);
+  const [isPreviewOpen, setIsPreviewOpen] = useState(false);
   const [cancelReason, setCancelReason] = useState("");
 
   const { data: submissions, isLoading } = useQuery<SubmissionWithDepartment[]>(
@@ -103,7 +105,7 @@ export default function Records() {
     mutationFn: async ({
       id,
       data,
-      file,
+      files,
       removed,
     }: {
       id: string;
@@ -114,7 +116,7 @@ export default function Records() {
         startTime: string;
         endTime: string;
       };
-      file: File | null;
+      files: File[];
       removed: string[];
     }) => {
       const formData = new FormData();
@@ -126,8 +128,10 @@ export default function Records() {
       if (removed.length > 0) {
         formData.append("removedAttachments", JSON.stringify(removed));
       }
-      if (file) {
-        formData.append("files", file);
+      if (files.length > 0) {
+        files.forEach((file) => {
+          formData.append("files", file);
+        });
       }
 
       const response = await fetch(`/api/submissions/${id}`, {
@@ -152,7 +156,7 @@ export default function Records() {
       setActionType(null);
       setExistingAttachments([]);
       setRemovedAttachments([]);
-      setNewFile(null);
+      setNewFiles([]);
     },
     onError: (error: Error) => {
       toast({
@@ -206,7 +210,7 @@ export default function Records() {
       });
       setExistingAttachments(parsedAttachments);
       setRemovedAttachments([]);
-      setNewFile(null);
+      setNewFiles([]);
     }
     setCancelReason("");
   };
@@ -224,7 +228,7 @@ export default function Records() {
           startTime: editData.startTime,
           endTime: editData.endTime,
         },
-        file: newFile,
+        files: newFiles,
         removed: removedAttachments,
       });
     } else if (actionType === "cancel") {
@@ -441,7 +445,7 @@ export default function Records() {
               <table className="w-full">
                 <thead>
                   <tr className="border-b text-left">
-                  <th className="py-3 px-4 text-sm font-medium text-muted-foreground uppercase tracking-wider">
+                    <th className="py-3 px-4 text-sm font-medium text-muted-foreground uppercase tracking-wider">
                       File
                     </th>
                     <th className="py-3 px-4 text-sm font-medium text-muted-foreground uppercase tracking-wider">
@@ -475,99 +479,113 @@ export default function Records() {
                     const attachment = attachments[0];
                     const isImage = attachment?.mimeType?.startsWith("image/");
                     return (
-                    <tr
-                      key={submission.id}
-                      className="border-b last:border-0 hover-elevate"
-                      data-testid={`row-record-${submission.id}`}
-                    >
-                    <td className="py-4 px-4 text-sm">
-                        {attachment ? (
-                          isImage ? (
-                            <button
-                              type="button"
-                              onClick={() => setPreviewImage(attachment)}
-                              className="rounded"
-                            >
-                              <img
-                                src={attachment.url}
-                                alt={attachment.originalName}
-                                className="h-10 w-10 rounded object-cover"
-                              />
-                            </button>
+                      <tr
+                        key={submission.id}
+                        className="border-b last:border-0 hover-elevate"
+                        data-testid={`row-record-${submission.id}`}
+                      >
+                        <td className="py-4 px-4 text-sm">
+                          {attachments.length > 0 ? (
+                            attachments.length > 1 ? (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => {
+                                  setPreviewFiles(attachments);
+                                  setIsPreviewOpen(true);
+                                }}
+                              >
+                                {attachments.length} Files
+                              </Button>
+                            ) : isImage ? (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setPreviewFiles([attachment]);
+                                  setIsPreviewOpen(true);
+                                }}
+                                className="rounded"
+                              >
+                                <img
+                                  src={attachment.url}
+                                  alt={attachment.originalName}
+                                  className="h-10 w-10 rounded object-cover"
+                                />
+                              </button>
+                            ) : (
+                              <a
+                                href={attachment.url}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="text-primary hover:underline"
+                              >
+                                {attachment.originalName}
+                              </a>
+                            )
                           ) : (
-                            <a
-                              href={attachment.url}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="text-primary hover:underline"
-                            >
-                              {attachment.originalName}
-                            </a>
-                          )
-                        ) : (
-                          "N/A"
-                        )}
-                      </td>
-                      <td className="py-4 px-4 font-mono text-sm">
-                        {format(new Date(submission.date), "MMM dd, yyyy")}
-                      </td>
-                      <td className="py-4 px-4 text-sm">
-                        {submission.department?.name || "N/A"}
-                      </td>
-                      <td className="py-4 px-4 text-sm text-muted-foreground">
-                        {submission.startTime && submission.endTime
-                          ? `${submission.startTime} - ${submission.endTime}`
-                          : "-"}
-                      </td>
-                      <td className="py-4 px-4 font-mono text-sm font-medium">
-                        {submission.totalHours}h
-                      </td>
-                      <td className="py-4 px-4">
-                        <StatusBadge status={submission.status} />
-                      </td>
-                      <td className="py-4 px-4 text-sm text-muted-foreground max-w-xs truncate">
-                        {submission.notes || "-"}
-                      </td>
-                      <td className="py-4 px-4">
-                        <div className="flex justify-end gap-2">
-                          {submission.status === "pending" &&
-                            !submission.isCancelled && (
-                              <>
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  className="gap-1.5"
-                                  onClick={() =>
-                                    handleAction(submission, "edit")
-                                  }
-                                  data-testid={`button-edit-${submission.id}`}
-                                >
-                                  <Edit className="h-4 w-4" />
-                                  Edit
-                                </Button>
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  className="gap-1.5 text-red-600 border-red-200 hover:bg-red-50"
-                                  onClick={() =>
-                                    handleAction(submission, "cancel")
-                                  }
-                                  data-testid={`button-cancel-${submission.id}`}
-                                >
-                                  <X className="h-4 w-4" />
-                                  Cancel
-                                </Button>
-                              </>
-                            )}
-                          {submission.isCancelled && (
-                            <span className="text-sm text-muted-foreground">
-                              Cancelled
-                            </span>
+                            "N/A"
                           )}
-                        </div>
-                      </td>
-                    </tr>
-                  );
+                        </td>
+                        <td className="py-4 px-4 font-mono text-sm">
+                          {format(new Date(submission.date), "MMM dd, yyyy")}
+                        </td>
+                        <td className="py-4 px-4 text-sm">
+                          {submission.department?.name || "N/A"}
+                        </td>
+                        <td className="py-4 px-4 text-sm text-muted-foreground">
+                          {submission.startTime && submission.endTime
+                            ? `${submission.startTime} - ${submission.endTime}`
+                            : "-"}
+                        </td>
+                        <td className="py-4 px-4 font-mono text-sm font-medium">
+                          {submission.totalHours}h
+                        </td>
+                        <td className="py-4 px-4">
+                          <StatusBadge status={submission.status} />
+                        </td>
+                        <td className="py-4 px-4 text-sm text-muted-foreground max-w-xs truncate">
+                          {submission.notes || "-"}
+                        </td>
+                        <td className="py-4 px-4">
+                          <div className="flex justify-end gap-2">
+                            {submission.status === "pending" &&
+                              !submission.isCancelled && (
+                                <>
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    className="gap-1.5"
+                                    onClick={() =>
+                                      handleAction(submission, "edit")
+                                    }
+                                    data-testid={`button-edit-${submission.id}`}
+                                  >
+                                    <Edit className="h-4 w-4" />
+                                    Edit
+                                  </Button>
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    className="gap-1.5 text-red-600 border-red-200 hover:bg-red-50"
+                                    onClick={() =>
+                                      handleAction(submission, "cancel")
+                                    }
+                                    data-testid={`button-cancel-${submission.id}`}
+                                  >
+                                    <X className="h-4 w-4" />
+                                    Cancel
+                                  </Button>
+                                </>
+                              )}
+                            {submission.isCancelled && (
+                              <span className="text-sm text-muted-foreground">
+                                Cancelled
+                              </span>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    );
                   })}
                 </tbody>
               </table>
@@ -713,14 +731,22 @@ export default function Records() {
 
             <div className="space-y-2">
               <label className="text-sm font-medium">Add Attachments</label>
+              <label className="text-sm font-medium">Add Attachments</label>
               <Input
                 type="file"
+                multiple
                 onChange={(e) => {
-                  const [file] = Array.from(e.target.files || []);
-                  setNewFile(file ?? null);
+                  const files = Array.from(e.target.files || []);
+                  setNewFiles(files);
                 }}
               />
             </div>
+            {newFiles.length > 0 && (
+              <div className="text-sm text-muted-foreground">
+                {newFiles.length} file{newFiles.length !== 1 ? "s" : ""}{" "}
+                selected
+              </div>
+            )}
           </div>
 
           <DialogFooter>
@@ -734,26 +760,11 @@ export default function Records() {
         </DialogContent>
       </Dialog>
 
-      <Dialog
-        open={!!previewImage}
-        onOpenChange={(open) => {
-          if (!open) setPreviewImage(null);
-        }}
-      >
-        <DialogContent className="max-w-3xl">
-          <DialogHeader>
-            <DialogTitle>{previewImage?.originalName}</DialogTitle>
-            <DialogDescription>Preview attachment</DialogDescription>
-          </DialogHeader>
-          {previewImage && (
-            <img
-              src={previewImage.url}
-              alt={previewImage.originalName}
-              className="max-h-[70vh] w-full rounded object-contain"
-            />
-          )}
-        </DialogContent>
-      </Dialog>
+      <FilePreviewModal
+        isOpen={isPreviewOpen}
+        onClose={() => setIsPreviewOpen(false)}
+        files={previewFiles}
+      />
 
       {/* Cancel Dialog */}
       <Dialog
