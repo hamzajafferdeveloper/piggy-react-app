@@ -400,6 +400,16 @@ export async function registerRoutes(
           return res.status(400).json({ message: "userId is required" });
         }
 
+        // Check if user already belongs to a department
+        const existingDepartment =
+          await storage.getUserDepartment(approverUserId);
+
+        if (existingDepartment) {
+          return res.status(409).json({
+            message: `User already belongs to another department (${existingDepartment.name}).`,
+          });
+        }
+
         await storage.addDepartmentApprover({
           userId: approverUserId,
           departmentId: id,
@@ -497,41 +507,56 @@ export async function registerRoutes(
     isAuthenticated,
     async (req, res) => {
       try {
-        const userId = getUserId(req);
-        if (!(await isAdmin(userId))) {
+        const adminUserId = getUserId(req);
+
+        if (!(await isAdmin(adminUserId))) {
           return res.status(403).json({ message: "Admin access required" });
         }
 
-        const { id } = req.params;
+        const { id: departmentId } = req.params;
         const { userId: employeeUserId } = req.body;
 
         if (!employeeUserId) {
           return res.status(400).json({ message: "userId is required" });
         }
 
+        // 🔍 NEW: Check if user already belongs to a department
+        const existingDepartment =
+          await storage.getUserDepartment(employeeUserId);
+
+        if (existingDepartment) {
+          return res.status(409).json({
+            message: `User already belongs to another department (${existingDepartment.name}).`,
+          });
+        }
+
+        // ✅ Add user to department
         await storage.addEmployeeToDepartment({
           userId: employeeUserId,
-          departmentId: id,
+          departmentId,
         });
 
+        // 📝 Audit log
         await storage.createAuditLog({
-          userId,
+          userId: adminUserId,
           action: "employee_added_to_department",
           entityType: "department",
-          entityId: id,
+          entityId: departmentId,
           newValue: employeeUserId,
         });
 
-        // Return enriched data with user details
+        // 🔄 Return enriched employee data
         const addedEmployee = await storage.getDepartmentEmployeeWithDetails(
           employeeUserId,
-          id,
+          departmentId,
         );
+
         if (!addedEmployee) {
           return res
             .status(500)
             .json({ message: "Failed to retrieve added employee" });
         }
+
         res.status(201).json(addedEmployee);
       } catch (error) {
         console.error("Error adding employee to department:", error);
@@ -583,7 +608,6 @@ export async function registerRoutes(
 
   // Get all submissions (for admin view)
   app.get("/api/submissions/all", isAuthenticated, async (req, res) => {
-    console.log("Fetching submissions with params:", req.query);
     try {
       const userId = getUserId(req);
       if (!(await isAdmin(userId))) {
@@ -679,8 +703,6 @@ export async function registerRoutes(
             .status(400)
             .json({ message: "Hours must be between 0.5 and 24" });
         }
-
-        console.log("Submission Data: ", data);
 
         const submission = await storage.createSubmission(data);
 

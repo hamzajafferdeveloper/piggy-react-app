@@ -45,6 +45,7 @@ export interface IStorage {
   getDepartmentsWithStats(): Promise<
     (Department & { employeeCount: number; approverCount: number })[]
   >;
+  getUserDepartment(userId: string): Promise<Department | null>;
 
   // User Roles
   getUserRoles(userId: string): Promise<UserRole[]>;
@@ -172,6 +173,7 @@ export interface IStorage {
   createUser(data: InsertUser): Promise<User>;
   getAllUsers(): Promise<User[]>;
   getAllUsersWithRoles(): Promise<any[]>;
+  updateUser(id: string, data: Partial<InsertUser>): Promise<User | undefined>;
 
   // NEW: Withdrawals
   createWithdrawal(data: InsertHoursWithdrawal): Promise<HoursWithdrawal>;
@@ -600,10 +602,14 @@ export class DatabaseStorage implements IStorage {
   async addEmployeeToDepartment(
     data: InsertEmployeeDepartment,
   ): Promise<EmployeeDepartment> {
-    // First, remove any existing department assignments to ensure 1:N relationship
+    // First, remove any existing department assignments (both employee and approver) to ensure 1:N relationship
     await db
       .delete(employeeDepartments)
       .where(eq(employeeDepartments.userId, data.userId));
+
+    await db
+      .delete(departmentApprovers)
+      .where(eq(departmentApprovers.userId, data.userId));
 
     const id = randomUUID();
     await db.insert(employeeDepartments).values({ ...data, id });
@@ -723,6 +729,15 @@ export class DatabaseStorage implements IStorage {
   async addDepartmentApprover(
     data: InsertDepartmentApprover,
   ): Promise<DepartmentApprover> {
+    // First, remove any existing department assignments (both employee and approver) to ensure 1:N relationship
+    await db
+      .delete(employeeDepartments)
+      .where(eq(employeeDepartments.userId, data.userId));
+
+    await db
+      .delete(departmentApprovers)
+      .where(eq(departmentApprovers.userId, data.userId));
+
     const id = randomUUID();
     await db.insert(departmentApprovers).values({ ...data, id });
     const [result] = await db
@@ -1429,6 +1444,40 @@ export class DatabaseStorage implements IStorage {
 
   async getAllUsers(): Promise<User[]> {
     return db.select().from(users);
+  }
+
+  async getUserDepartment(userId: string): Promise<Department | null> {
+    const [employeeResult] = await db
+      .select({
+        id: departments.id,
+        name: departments.name,
+        description: departments.description,
+        createdAt: departments.createdAt,
+      })
+      .from(employeeDepartments)
+      .innerJoin(
+        departments,
+        eq(employeeDepartments.departmentId, departments.id),
+      )
+      .where(eq(employeeDepartments.userId, userId));
+
+    if (employeeResult) return employeeResult as Department;
+
+    const [approverResult] = await db
+      .select({
+        id: departments.id,
+        name: departments.name,
+        description: departments.description,
+        createdAt: departments.createdAt,
+      })
+      .from(departmentApprovers)
+      .innerJoin(
+        departments,
+        eq(departmentApprovers.departmentId, departments.id),
+      )
+      .where(eq(departmentApprovers.userId, userId));
+
+    return (approverResult as Department) ?? null;
   }
 }
 
