@@ -34,14 +34,30 @@ import { cn } from "@/lib/utils";
 import { format } from "date-fns";
 import { Calendar } from "@/components/ui/calendar";
 
-const formSchema = z.object({
-  amount: z.coerce
-    .number()
-    .min(0.5, "Minimum withdrawal is 0.5 hours")
-    .refine((val) => val % 0.5 === 0, "Amount must be in 0.5 increments"),
-  date: z.date({ required_error: "Please select a date" }),
-  reason: z.string().optional(),
-});
+const formSchema = z
+  .object({
+    amount: z.coerce
+      .number()
+      .min(0.5, "Minimum withdrawal is 0.5 hours")
+      .refine((val) => val % 0.5 === 0, "Amount must be in 0.5 increments"),
+    date: z.date({ required_error: "Please select a date" }),
+    reason: z.string().optional(),
+    useTimeRange: z.boolean().default(false),
+    startTime: z.string().optional(),
+    endTime: z.string().optional(),
+  })
+  .refine(
+    (data) => {
+      if (data.useTimeRange) {
+        return data.startTime && data.endTime;
+      }
+      return true;
+    },
+    {
+      message: "Start and end time are required when using time range",
+      path: ["startTime"],
+    },
+  );
 
 type FormData = z.infer<typeof formSchema>;
 
@@ -62,14 +78,38 @@ export default function WithdrawHours() {
       amount: 0.5,
       date: new Date(),
       reason: "",
+      useTimeRange: false,
+      startTime: "09:00",
+      endTime: "17:00",
     },
   });
+
+  const useTimeRange = form.watch("useTimeRange");
+  const startTime = form.watch("startTime");
+  const endTime = form.watch("endTime");
+
+  // Calculate hours when time range changes
+  if (useTimeRange && startTime && endTime) {
+    const [startHour, startMin] = startTime.split(":").map(Number);
+    const [endHour, endMin] = endTime.split(":").map(Number);
+    const startMinutes = startHour * 60 + startMin;
+    const endMinutes = endHour * 60 + endMin;
+    const diff = endMinutes - startMinutes;
+    const exactHours = Math.max(0, diff / 60);
+    const calculatedAmount = Math.floor(exactHours * 2) / 2;
+
+    if (calculatedAmount !== form.getValues("amount")) {
+      form.setValue("amount", calculatedAmount);
+    }
+  }
 
   const mutation = useMutation({
     mutationFn: async (data: FormData) => {
       return apiRequest("POST", "/api/withdrawals", {
         ...data,
         date: data.date.toISOString(),
+        startTime: data.useTimeRange ? data.startTime : null,
+        endTime: data.useTimeRange ? data.endTime : null,
       });
     },
     onSuccess: () => {
@@ -124,6 +164,57 @@ export default function WithdrawHours() {
         <CardContent>
           <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+              <div className="flex items-center space-x-3 pb-4">
+                <div className="flex items-center space-x-2">
+                  <input
+                    type="checkbox"
+                    id="useTimeRange"
+                    className="h-4 w-4 rounded border-gray-300"
+                    checked={form.watch("useTimeRange")}
+                    onChange={(e) =>
+                      form.setValue("useTimeRange", e.target.checked)
+                    }
+                  />
+                  <label
+                    htmlFor="useTimeRange"
+                    className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+                  >
+                    Use time range to calculate hours
+                  </label>
+                </div>
+              </div>
+
+              {useTimeRange ? (
+                <div className="grid grid-cols-2 gap-4">
+                  <FormField
+                    control={form.control}
+                    name="startTime"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Start Time</FormLabel>
+                        <FormControl>
+                          <Input type="time" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="endTime"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>End Time</FormLabel>
+                        <FormControl>
+                          <Input type="time" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+              ) : null}
+
               <FormField
                 control={form.control}
                 name="amount"
@@ -138,9 +229,15 @@ export default function WithdrawHours() {
                         max={availableBalance > 0 ? availableBalance : 0.5}
                         placeholder="0.0"
                         {...field}
+                        readOnly={useTimeRange}
+                        className={useTimeRange ? "bg-muted" : ""}
                       />
                     </FormControl>
-                    <FormDescription>Increments of 0.5 hours.</FormDescription>
+                    <FormDescription>
+                      {useTimeRange
+                        ? "Calculated from time range."
+                        : "Increments of 0.5 hours."}
+                    </FormDescription>
                     <FormMessage />
                   </FormItem>
                 )}

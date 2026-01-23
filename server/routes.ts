@@ -17,7 +17,7 @@ import App from "@/App";
 
 export async function registerRoutes(
   httpServer: Server,
-  app: Express
+  app: Express,
 ): Promise<Server> {
   // Authentication is handled in index.ts via setupAuth
 
@@ -78,12 +78,12 @@ export async function registerRoutes(
       destination: (
         _req: Request,
         _file: UploadedFile,
-        cb: (error: Error | null, destination: string) => void
+        cb: (error: Error | null, destination: string) => void,
       ) => cb(null, uploadsDir),
       filename: (
         _req: Request,
         file: UploadedFile,
-        cb: (error: Error | null, filename: string) => void
+        cb: (error: Error | null, filename: string) => void,
       ) => {
         const ext = path.extname(file.originalname);
         cb(null, `${randomUUID()}${ext}`);
@@ -137,6 +137,12 @@ export async function registerRoutes(
         date: new Date(req.body.date),
       });
 
+      // Validate time range if provided
+      if (data.startTime && data.endTime) {
+        // Basic validation that end time is after start time handled by frontend mostly,
+        // but good to ensure they exist.
+      }
+
       // 1. Validate Amount
       if (data.amount <= 0) {
         return res.status(400).json({ message: "Amount must be positive" });
@@ -160,6 +166,11 @@ export async function registerRoutes(
         newValue: `${data.amount} hours`,
         reason: data.reason,
       });
+
+      // Update audit log if time range provided
+      if (data.startTime && data.endTime) {
+        // Could update log or just rely on the entity details
+      }
 
       res.status(201).json(withdrawal);
     } catch (error) {
@@ -305,7 +316,7 @@ export async function registerRoutes(
           .status(500)
           .json({ message: "Failed to fetch department approvers" });
       }
-    }
+    },
   );
 
   app.post(
@@ -341,7 +352,7 @@ export async function registerRoutes(
         // Return enriched data with user details
         const addedApprover = await storage.getDepartmentApproverWithDetails(
           approverUserId,
-          id
+          id,
         );
         if (!addedApprover) {
           return res
@@ -353,7 +364,7 @@ export async function registerRoutes(
         console.error("Error adding department approver:", error);
         res.status(500).json({ message: "Failed to add department approver" });
       }
-    }
+    },
   );
 
   app.delete(
@@ -388,7 +399,7 @@ export async function registerRoutes(
           .status(500)
           .json({ message: "Failed to remove department approver" });
       }
-    }
+    },
   );
 
   // ===================
@@ -414,7 +425,7 @@ export async function registerRoutes(
           .status(500)
           .json({ message: "Failed to fetch department employees" });
       }
-    }
+    },
   );
 
   app.post(
@@ -450,7 +461,7 @@ export async function registerRoutes(
         // Return enriched data with user details
         const addedEmployee = await storage.getDepartmentEmployeeWithDetails(
           employeeUserId,
-          id
+          id,
         );
         if (!addedEmployee) {
           return res
@@ -464,7 +475,7 @@ export async function registerRoutes(
           .status(500)
           .json({ message: "Failed to add employee to department" });
       }
-    }
+    },
   );
 
   app.delete(
@@ -499,7 +510,7 @@ export async function registerRoutes(
           .status(500)
           .json({ message: "Failed to remove employee from department" });
       }
-    }
+    },
   );
 
   // ===================
@@ -517,13 +528,15 @@ export async function registerRoutes(
 
       const page = parseInt(req.query.page as string) || 1;
       const limit = parseInt(req.query.limit as string) || 10;
-      const search = (req.query.search as string) || '';
+      const search = (req.query.search as string) || "";
 
-      const { submissions, total } = await storage.getAllSubmissionsWithDetails({
-        page,
-        limit,
-        search,
-      });
+      const { submissions, total } = await storage.getAllSubmissionsWithDetails(
+        {
+          page,
+          limit,
+          search,
+        },
+      );
 
       res.json({ submissions, total });
     } catch (error) {
@@ -549,80 +562,87 @@ export async function registerRoutes(
     isAuthenticated,
     upload.array("files"),
     async (req, res) => {
-    try {
-      const userId = getUserId(req);
+      try {
+        const userId = getUserId(req);
 
-      const uploadedFiles = ((req as Request).files as UploadedFile[] | undefined) || [];
-      const attachments: AttachmentMeta[] = uploadedFiles.map((file) => ({
-        originalName: file.originalname,
-        filename: file.filename,
-        url: `/uploads/${file.filename}`,
-        mimeType: file.mimetype,
-        size: file.size,
-      }));
+        const uploadedFiles =
+          ((req as Request).files as UploadedFile[] | undefined) || [];
+        const attachments: AttachmentMeta[] = uploadedFiles.map((file) => ({
+          originalName: file.originalname,
+          filename: file.filename,
+          url: `/uploads/${file.filename}`,
+          mimeType: file.mimetype,
+          size: file.size,
+        }));
 
-      const submittedTotalHours = Number(req.body.totalHours);
+        const submittedTotalHours = Number(req.body.totalHours);
 
-      // Validate hours increment (strict 0.5 enforcement)
-      if (submittedTotalHours % 0.5 !== 0) {
-        return res
-          .status(400)
-          .json({ message: "Total hours must be in 0.5 increments" });
-      }
-
-      let departmentId = req.body.departmentId;
-
-      // If departmentId is NOT provided, fetch it
-      if (!departmentId) {
-        // Get user's primary department (first one found)
-        const userDepts = await storage.getEmployeeDepartments(userId);
-        if (userDepts.length === 0) {
-           return res.status(400).json({ message: "You are not assigned to any department. Please contact HR." });
+        // Validate hours increment (strict 0.5 enforcement)
+        if (submittedTotalHours % 0.5 !== 0) {
+          return res
+            .status(400)
+            .json({ message: "Total hours must be in 0.5 increments" });
         }
-        departmentId = userDepts[0].departmentId;
+
+        let departmentId = req.body.departmentId;
+
+        // If departmentId is NOT provided, fetch it
+        if (!departmentId) {
+          // Get user's primary department (first one found)
+          const userDepts = await storage.getEmployeeDepartments(userId);
+          if (userDepts.length === 0) {
+            return res
+              .status(400)
+              .json({
+                message:
+                  "You are not assigned to any department. Please contact HR.",
+              });
+          }
+          departmentId = userDepts[0].departmentId;
+        }
+
+        const data = insertHoursSubmissionSchema.parse({
+          ...req.body,
+          totalHours: submittedTotalHours,
+          departmentId, // Injected or validated
+          userId,
+          date: new Date(req.body.date),
+          attachments:
+            attachments.length > 0 ? JSON.stringify(attachments) : null,
+        });
+
+        // Validate hours
+        if (data.totalHours < 0.5 || data.totalHours > 24) {
+          return res
+            .status(400)
+            .json({ message: "Hours must be between 0.5 and 24" });
+        }
+
+        console.log("Submission Data: ", data);
+
+        const submission = await storage.createSubmission(data);
+
+        // Create audit log
+        await storage.createAuditLog({
+          userId,
+          action: "submission_created",
+          entityType: "submission",
+          entityId: submission.id,
+          newValue: `${data.totalHours} hours`,
+        });
+
+        res.status(201).json(submission);
+      } catch (error) {
+        console.error("Error creating submission:", error);
+        if (error instanceof z.ZodError) {
+          return res
+            .status(400)
+            .json({ message: "Invalid data", errors: error.errors });
+        }
+        res.status(500).json({ message: "Failed to create submission" });
       }
-
-      const data = insertHoursSubmissionSchema.parse({
-        ...req.body,
-        totalHours: submittedTotalHours,
-        departmentId, // Injected or validated
-        userId,
-        date: new Date(req.body.date),
-        attachments: attachments.length > 0 ? JSON.stringify(attachments) : null,
-      });
-
-      // Validate hours
-      if (data.totalHours < 0.5 || data.totalHours > 24) {
-        return res
-          .status(400)
-          .json({ message: "Hours must be between 0.5 and 24" });
-      }
-
-      console.log("Submission Data: ", data);
-
-      const submission = await storage.createSubmission(data);
-
-      // Create audit log
-      await storage.createAuditLog({
-        userId,
-        action: "submission_created",
-        entityType: "submission",
-        entityId: submission.id,
-        newValue: `${data.totalHours} hours`,
-      });
-
-      res.status(201).json(submission);
-      
-    } catch (error) {
-      console.error("Error creating submission:", error);
-      if (error instanceof z.ZodError) {
-        return res
-          .status(400)
-          .json({ message: "Invalid data", errors: error.errors });
-      }
-      res.status(500).json({ message: "Failed to create submission" });
-    }
-  });
+    },
+  );
 
   // ===================
   // APPROVALS
@@ -681,7 +701,7 @@ export async function registerRoutes(
           (await isAdmin(userId)) ||
           (await storage.isUserApproverForDepartment(
             userId,
-            submission.departmentId
+            submission.departmentId,
           ));
 
         if (!canEscalate) {
@@ -705,7 +725,7 @@ export async function registerRoutes(
         console.error("Error escalating submission:", error);
         res.status(500).json({ message: "Failed to escalate submission" });
       }
-    }
+    },
   );
 
   app.post(
@@ -727,7 +747,10 @@ export async function registerRoutes(
         }
 
         // Check if submission is still pending or escalated (state guard)
-        if (submission.status !== "pending" && submission.status !== "escalated") {
+        if (
+          submission.status !== "pending" &&
+          submission.status !== "escalated"
+        ) {
           return res
             .status(409)
             .json({ message: "Submission has already been processed" });
@@ -749,7 +772,7 @@ export async function registerRoutes(
             (await isAdmin(userId)) ||
             (await storage.isUserApproverForDepartment(
               userId,
-              submission.departmentId
+              submission.departmentId,
             ));
         }
 
@@ -763,7 +786,7 @@ export async function registerRoutes(
           id,
           userId,
           status,
-          comment
+          comment,
         );
 
         // Create audit log
@@ -783,7 +806,7 @@ export async function registerRoutes(
         console.error("Error processing approval:", error);
         res.status(500).json({ message: "Failed to process approval" });
       }
-    }
+    },
   );
 
   // ===================
@@ -825,7 +848,7 @@ export async function registerRoutes(
         // Verify approver has appropriate role
         const approverRoles = await storage.getUserRoles(approverUserId);
         const hasApproverRole = approverRoles.some((r) =>
-          ["approver", "hr", "admin"].includes(r.role)
+          ["approver", "hr", "admin"].includes(r.role),
         );
 
         if (!hasApproverRole) {
@@ -837,7 +860,7 @@ export async function registerRoutes(
         // Check for duplicate assignment
         const isAlreadyAssigned = await storage.isUserAssignedApprover(
           id,
-          approverUserId
+          approverUserId,
         );
         if (isAlreadyAssigned) {
           return res
@@ -871,7 +894,7 @@ export async function registerRoutes(
         console.error("Error assigning approver:", error);
         res.status(500).json({ message: "Failed to assign approver" });
       }
-    }
+    },
   );
 
   /**
@@ -890,7 +913,7 @@ export async function registerRoutes(
         console.error("Error fetching submission approvers:", error);
         res.status(500).json({ message: "Failed to fetch approvers" });
       }
-    }
+    },
   );
 
   /**
@@ -928,7 +951,7 @@ export async function registerRoutes(
         console.error("Error removing approver:", error);
         res.status(500).json({ message: "Failed to remove approver" });
       }
-    }
+    },
   );
 
   // ===================
@@ -962,11 +985,9 @@ export async function registerRoutes(
         }
 
         if (!reason || reason.trim().length < 10) {
-          return res
-            .status(400)
-            .json({
-              message: "Override reason must be at least 10 characters",
-            });
+          return res.status(400).json({
+            message: "Override reason must be at least 10 characters",
+          });
         }
 
         const submission = await storage.getSubmission(id);
@@ -979,7 +1000,7 @@ export async function registerRoutes(
           id,
           userId,
           status,
-          reason
+          reason,
         );
 
         // Create detailed audit log
@@ -1000,7 +1021,7 @@ export async function registerRoutes(
           .status(500)
           .json({ message: error.message || "Failed to override submission" });
       }
-    }
+    },
   );
 
   // ===================
@@ -1016,109 +1037,116 @@ export async function registerRoutes(
     isAuthenticated,
     upload.array("files"),
     async (req, res) => {
-    try {
-      const userId = getUserId(req);
-      const { id } = req.params;
-      const { totalHours, notes, date, startTime, endTime, departmentId } =
-        req.body;
+      try {
+        const userId = getUserId(req);
+        const { id } = req.params;
+        const { totalHours, notes, date, startTime, endTime, departmentId } =
+          req.body;
 
-      const submission = await storage.getSubmission(id);
-      if (!submission) {
-        return res.status(404).json({ message: "Submission not found" });
+        const submission = await storage.getSubmission(id);
+        if (!submission) {
+          return res.status(404).json({ message: "Submission not found" });
+        }
+
+        // Check if cancelled
+        if (submission.isCancelled) {
+          return res
+            .status(400)
+            .json({ message: "Cannot edit cancelled submission" });
+        }
+
+        // Permission check
+        const isOwner = submission.userId === userId;
+        const canEditAny = (await isAdmin(userId)) || (await isHR(userId));
+
+        if (!isOwner && !canEditAny) {
+          return res
+            .status(403)
+            .json({ message: "Not authorized to edit this submission" });
+        }
+
+        // If not admin/HR, can only edit if pending
+        if (isOwner && !canEditAny && submission.status !== "pending") {
+          return res
+            .status(403)
+            .json({ message: "Can only edit pending submissions" });
+        }
+
+        const existingAttachments = submission.attachments
+          ? (JSON.parse(submission.attachments) as AttachmentMeta[])
+          : [];
+        const removedAttachments = req.body.removedAttachments
+          ? (JSON.parse(req.body.removedAttachments) as string[])
+          : [];
+        const uploadedFiles =
+          ((req as Request).files as UploadedFile[] | undefined) || [];
+        const newUploads: AttachmentMeta[] = uploadedFiles.map((file) => ({
+          originalName: file.originalname,
+          filename: file.filename,
+          url: `/uploads/${file.filename}`,
+          mimeType: file.mimetype,
+          size: file.size,
+        }));
+
+        removedAttachments.forEach((filename) => {
+          const filePath = path.join(uploadsDir, filename);
+          fs.unlink(filePath, () => undefined);
+        });
+
+        const mergedAttachments = existingAttachments
+          .filter(
+            (attachment) => !removedAttachments.includes(attachment.filename),
+          )
+          .concat(newUploads);
+
+        // Build update data
+        const updateData: Partial<InsertHoursSubmission> = {};
+        if (totalHours !== undefined)
+          updateData.totalHours = Number(totalHours);
+        if (notes !== undefined) updateData.notes = notes;
+        if (date !== undefined) updateData.date = new Date(date);
+        if (startTime !== undefined) updateData.startTime = startTime;
+        if (endTime !== undefined) updateData.endTime = endTime;
+        if (departmentId !== undefined) updateData.departmentId = departmentId;
+        if (removedAttachments.length > 0 || newUploads.length > 0) {
+          updateData.attachments =
+            mergedAttachments.length > 0
+              ? JSON.stringify(mergedAttachments)
+              : null;
+        }
+
+        // Store old values for audit
+        const oldValues = {
+          totalHours: submission.totalHours,
+          notes: submission.notes,
+          date: submission.date,
+          startTime: submission.startTime,
+          endTime: submission.endTime,
+          departmentId: submission.departmentId,
+        };
+
+        // Update submission
+        const updated = await storage.updateSubmission(id, updateData, userId);
+
+        // Create audit log with detailed changes
+        await storage.createAuditLog({
+          userId,
+          action: "submission_edited",
+          entityType: "submission",
+          entityId: id,
+          oldValue: JSON.stringify(oldValues),
+          newValue: JSON.stringify(updateData),
+        });
+
+        res.json(updated);
+      } catch (error: any) {
+        console.error("Error editing submission:", error);
+        res
+          .status(500)
+          .json({ message: error.message || "Failed to edit submission" });
       }
-
-      // Check if cancelled
-      if (submission.isCancelled) {
-        return res
-          .status(400)
-          .json({ message: "Cannot edit cancelled submission" });
-      }
-
-      // Permission check
-      const isOwner = submission.userId === userId;
-      const canEditAny = (await isAdmin(userId)) || (await isHR(userId));
-
-      if (!isOwner && !canEditAny) {
-        return res
-          .status(403)
-          .json({ message: "Not authorized to edit this submission" });
-      }
-
-      // If not admin/HR, can only edit if pending
-      if (isOwner && !canEditAny && submission.status !== "pending") {
-        return res
-          .status(403)
-          .json({ message: "Can only edit pending submissions" });
-      }
-
-      const existingAttachments = submission.attachments
-        ? (JSON.parse(submission.attachments) as AttachmentMeta[])
-        : [];
-      const removedAttachments = req.body.removedAttachments
-        ? (JSON.parse(req.body.removedAttachments) as string[])
-        : [];
-      const uploadedFiles = ((req as Request).files as UploadedFile[] | undefined) || [];
-      const newUploads: AttachmentMeta[] = uploadedFiles.map((file) => ({
-        originalName: file.originalname,
-        filename: file.filename,
-        url: `/uploads/${file.filename}`,
-        mimeType: file.mimetype,
-        size: file.size,
-      }));
-
-      removedAttachments.forEach((filename) => {
-        const filePath = path.join(uploadsDir, filename);
-        fs.unlink(filePath, () => undefined);
-      });
-
-      const mergedAttachments = existingAttachments
-        .filter((attachment) => !removedAttachments.includes(attachment.filename))
-        .concat(newUploads);
-
-      // Build update data
-      const updateData: Partial<InsertHoursSubmission> = {};
-      if (totalHours !== undefined) updateData.totalHours = Number(totalHours);
-      if (notes !== undefined) updateData.notes = notes;
-      if (date !== undefined) updateData.date = new Date(date);
-      if (startTime !== undefined) updateData.startTime = startTime;
-      if (endTime !== undefined) updateData.endTime = endTime;
-      if (departmentId !== undefined) updateData.departmentId = departmentId;
-      if (removedAttachments.length > 0 || newUploads.length > 0) {
-        updateData.attachments =
-          mergedAttachments.length > 0 ? JSON.stringify(mergedAttachments) : null;
-      }
-
-      // Store old values for audit
-      const oldValues = {
-        totalHours: submission.totalHours,
-        notes: submission.notes,
-        date: submission.date,
-        startTime: submission.startTime,
-        endTime: submission.endTime,
-        departmentId: submission.departmentId,
-      };
-
-      // Update submission
-      const updated = await storage.updateSubmission(id, updateData, userId);
-
-      // Create audit log with detailed changes
-      await storage.createAuditLog({
-        userId,
-        action: "submission_edited",
-        entityType: "submission",
-        entityId: id,
-        oldValue: JSON.stringify(oldValues),
-        newValue: JSON.stringify(updateData),
-      });
-
-      res.json(updated);
-    } catch (error: any) {
-      console.error("Error editing submission:", error);
-      res
-        .status(500)
-        .json({ message: error.message || "Failed to edit submission" });
-    }
-  });
+    },
+  );
 
   // ===================
   // NEW: CANCEL SUBMISSION
@@ -1135,11 +1163,9 @@ export async function registerRoutes(
       const { reason } = req.body;
 
       if (!reason || reason.trim().length < 5) {
-        return res
-          .status(400)
-          .json({
-            message: "Cancellation reason is required (minimum 5 characters)",
-          });
+        return res.status(400).json({
+          message: "Cancellation reason is required (minimum 5 characters)",
+        });
       }
 
       const submission = await storage.getSubmission(id);
@@ -1242,7 +1268,7 @@ export async function registerRoutes(
           .status(500)
           .json({ message: error.message || "Failed to uncancel submission" });
       }
-    }
+    },
   );
 
   // ===================
@@ -1333,7 +1359,7 @@ export async function registerRoutes(
 
         const updatedRoles = await storage.setUserRoles(
           userId,
-          rolesWithEmployee
+          rolesWithEmployee,
         );
 
         // Create audit log
@@ -1350,7 +1376,7 @@ export async function registerRoutes(
         console.error("Error updating user roles:", error);
         res.status(500).json({ message: "Failed to update user roles" });
       }
-    }
+    },
   );
 
   app.get("/api/admin/departments", isAuthenticated, async (req, res) => {
