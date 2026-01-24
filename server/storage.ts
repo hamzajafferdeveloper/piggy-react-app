@@ -285,8 +285,8 @@ export class DatabaseStorage implements IStorage {
       })
       .from(hoursWithdrawals)
       .innerJoin(users, eq(hoursWithdrawals.userId, users.id))
-      .innerJoin(employeeDepartments, eq(users.id, employeeDepartments.userId))
-      .innerJoin(
+      .leftJoin(employeeDepartments, eq(users.id, employeeDepartments.userId))
+      .leftJoin(
         departments,
         eq(employeeDepartments.departmentId, departments.id),
       )
@@ -308,8 +308,8 @@ export class DatabaseStorage implements IStorage {
       })
       .from(hoursWithdrawals)
       .innerJoin(users, eq(hoursWithdrawals.userId, users.id))
-      .innerJoin(employeeDepartments, eq(users.id, employeeDepartments.userId))
-      .innerJoin(
+      .leftJoin(employeeDepartments, eq(users.id, employeeDepartments.userId))
+      .leftJoin(
         departments,
         eq(employeeDepartments.departmentId, departments.id),
       )
@@ -329,8 +329,8 @@ export class DatabaseStorage implements IStorage {
       })
       .from(hoursWithdrawals)
       .innerJoin(users, eq(hoursWithdrawals.userId, users.id))
-      .innerJoin(employeeDepartments, eq(users.id, employeeDepartments.userId))
-      .innerJoin(
+      .leftJoin(employeeDepartments, eq(users.id, employeeDepartments.userId))
+      .leftJoin(
         departments,
         eq(employeeDepartments.departmentId, departments.id),
       )

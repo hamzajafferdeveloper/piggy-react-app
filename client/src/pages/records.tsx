@@ -615,9 +615,7 @@ export default function Records() {
                           {hoursDisplay}
                         </td>
                         <td className="py-4 px-4">
-                          <StatusBadge
-                            status={isSubmission ? record.status : "withdrawn"}
-                          />
+                          <StatusBadge status={record.status} />
                         </td>
                         <td className="py-4 px-4 text-sm text-muted-foreground max-w-xs truncate">
                           {notes || "-"}
