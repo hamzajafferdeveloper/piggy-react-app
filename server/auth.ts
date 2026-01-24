@@ -12,7 +12,6 @@ declare global {
   }
 }
 
-
 export function setupAuth(app: Express) {
   // Authentication middleware to populate req.user from JWT cookie
   app.use(async (req, res, next) => {
@@ -24,7 +23,7 @@ export function setupAuth(app: Express) {
     try {
       const decoded = jwt.verify(token, JWT_SECRET) as { id: string };
       const user = await storage.getUser(decoded.id);
-      if (user) {
+      if (user && user.isActive) {
         req.user = user;
       }
       next();
@@ -78,6 +77,10 @@ export function setupAuth(app: Express) {
         return res.status(401).send("Invalid email or password");
       }
 
+      if (!user.isActive) {
+        return res.status(403).send("Account is deactivated");
+      }
+
       const token = jwt.sign({ id: user.id }, JWT_SECRET, { expiresIn: "7d" });
       res.cookie("accessToken", token, {
         httpOnly: true,
@@ -101,14 +104,18 @@ export function setupAuth(app: Express) {
 
   app.get("/api/user", async (req, res) => {
     if (!req.user) return res.sendStatus(401);
-    
+
     // Return user with roles
     const userWithRoles = await storage.getUserWithRoles(req.user.id);
     res.json(userWithRoles);
   });
 }
 
-export function isAuthenticated(req: Request, res: Response, next: NextFunction) {
+export function isAuthenticated(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) {
   if (req.user) return next();
   res.status(401).send("Unauthorized");
 }

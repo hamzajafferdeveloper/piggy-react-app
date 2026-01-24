@@ -10,20 +10,12 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
   Dialog,
   DialogContent,
   DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from "@/components/ui/dialog";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -33,8 +25,26 @@ import { TableSkeleton } from "@/components/loading-skeleton";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { isUnauthorizedError } from "@/lib/auth-utils";
-import { Users, Search, Shield, Pencil } from "lucide-react";
+import {
+  Users,
+  Search,
+  Pencil,
+  Lock,
+  Unlock,
+  KeyRound,
+  MoreVertical,
+} from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Badge } from "@/components/ui/badge";
 import type { User, Department, UserRole } from "@shared/schema";
+import { useAuth } from "@/hooks/use-auth";
 
 interface UserWithRoles extends User {
   roles: UserRole[];
@@ -45,10 +55,16 @@ type RoleType = "employee" | "approver" | "admin" | "hr";
 
 export default function ManageUsers() {
   const { toast } = useToast();
+  const { user: currentUser } = useAuth();
   const queryClient = useQueryClient();
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedUser, setSelectedUser] = useState<UserWithRoles | null>(null);
   const [selectedRoles, setSelectedRoles] = useState<RoleType[]>([]);
+
+  // Password Reset State
+  const [resetPasswordUser, setResetPasswordUser] =
+    useState<UserWithRoles | null>(null);
+  const [newPassword, setNewPassword] = useState("");
 
   const { data: users, isLoading } = useQuery<UserWithRoles[]>({
     queryKey: ["/api/admin/users"],
@@ -58,6 +74,7 @@ export default function ManageUsers() {
     queryKey: ["/api/departments"],
   });
 
+  // Update Roles Mutation
   const updateRolesMutation = useMutation({
     mutationFn: async ({
       userId,
@@ -77,24 +94,77 @@ export default function ManageUsers() {
       setSelectedUser(null);
     },
     onError: (error: Error) => {
-      if (isUnauthorizedError(error)) {
-        toast({
-          title: "Unauthorized",
-          description: "Logging in again...",
-          variant: "destructive",
-        });
-        setTimeout(() => {
-          window.location.href = "/api/login";
-        }, 500);
-        return;
-      }
-      toast({
-        title: "Error",
-        description: "Failed to update user roles. Please try again.",
-        variant: "destructive",
-      });
+      handleError(error, "Failed to update user roles.");
     },
   });
+
+  // Toggle Status Mutation
+  const toggleStatusMutation = useMutation({
+    mutationFn: async ({
+      userId,
+      isActive,
+    }: {
+      userId: string;
+      isActive: boolean;
+    }) => {
+      return apiRequest("PATCH", `/api/users/${userId}/status`, { isActive });
+    },
+    onSuccess: (_, variables) => {
+      toast({
+        title: "Success",
+        description: `User ${variables.isActive ? "activated" : "deactivated"} successfully.`,
+      });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/users"] });
+    },
+    onError: (error: Error) => {
+      handleError(error, "Failed to update user status.");
+    },
+  });
+
+  // Reset Password Mutation
+  const resetPasswordMutation = useMutation({
+    mutationFn: async ({
+      userId,
+      password,
+    }: {
+      userId: string;
+      password: string;
+    }) => {
+      return apiRequest("POST", `/api/users/${userId}/reset-password`, {
+        password,
+      });
+    },
+    onSuccess: () => {
+      toast({
+        title: "Success",
+        description: "Password reset successfully.",
+      });
+      setResetPasswordUser(null);
+      setNewPassword("");
+    },
+    onError: (error: Error) => {
+      handleError(error, "Failed to reset password.");
+    },
+  });
+
+  const handleError = (error: Error, defaultMsg: string) => {
+    if (isUnauthorizedError(error)) {
+      toast({
+        title: "Unauthorized",
+        description: "Logging in again...",
+        variant: "destructive",
+      });
+      setTimeout(() => {
+        window.location.href = "/api/login";
+      }, 500);
+      return;
+    }
+    toast({
+      title: "Error",
+      description: error.message || defaultMsg,
+      variant: "destructive",
+    });
+  };
 
   const filteredUsers = users?.filter((user) => {
     const name = `${user.firstName || ""} ${user.lastName || ""} ${
@@ -113,14 +183,6 @@ export default function ManageUsers() {
     return "U";
   };
 
-  const getPrimaryRole = (roles: UserRole[]): RoleType => {
-    const roleNames = roles.map((r) => r.role);
-    if (roleNames.includes("admin")) return "admin";
-    if (roleNames.includes("hr")) return "hr";
-    if (roleNames.includes("approver")) return "approver";
-    return "employee";
-  };
-
   const openEditDialog = (user: UserWithRoles) => {
     setSelectedUser(user);
     setSelectedRoles(user.roles.map((r) => r.role as RoleType));
@@ -129,7 +191,7 @@ export default function ManageUsers() {
   const toggleRole = (role: RoleType) => {
     if (role === "employee") return; // Employee is always required
     setSelectedRoles((prev) =>
-      prev.includes(role) ? prev.filter((r) => r !== role) : [...prev, role]
+      prev.includes(role) ? prev.filter((r) => r !== role) : [...prev, role],
     );
   };
 
@@ -141,12 +203,21 @@ export default function ManageUsers() {
     });
   };
 
+  const handleResetPassword = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!resetPasswordUser || !newPassword) return;
+    resetPasswordMutation.mutate({
+      userId: resetPasswordUser.id,
+      password: newPassword,
+    });
+  };
+
   return (
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold">Manage Users</h1>
         <p className="text-muted-foreground">
-          View and manage user accounts and their roles
+          View and manage user accounts, status, and password resets.
         </p>
       </div>
 
@@ -194,6 +265,9 @@ export default function ManageUsers() {
                       Email
                     </th>
                     <th className="py-3 px-4 text-sm font-medium text-muted-foreground uppercase tracking-wider">
+                      Status
+                    </th>
+                    <th className="py-3 px-4 text-sm font-medium text-muted-foreground uppercase tracking-wider">
                       Role
                     </th>
                     <th className="py-3 px-4 text-sm font-medium text-muted-foreground uppercase tracking-wider">
@@ -208,7 +282,7 @@ export default function ManageUsers() {
                   {filteredUsers.map((user) => (
                     <tr
                       key={user.id}
-                      className="border-b last:border-0 hover-elevate"
+                      className="border-b last:border-0 hover run-elevate"
                       data-testid={`row-user-${user.id}`}
                     >
                       <td className="py-4 px-4">
@@ -234,6 +308,14 @@ export default function ManageUsers() {
                         {user.email || "N/A"}
                       </td>
                       <td className="py-4 px-4">
+                        <Badge
+                          variant={user.isActive ? "default" : "destructive"}
+                          className="capitalize"
+                        >
+                          {user.isActive ? "Active" : "Inactive"}
+                        </Badge>
+                      </td>
+                      <td className="py-4 px-4">
                         <div className="flex flex-wrap gap-1">
                           {user.roles.map((role) => (
                             <RoleBadge
@@ -251,19 +333,56 @@ export default function ManageUsers() {
                           ? user.departments.map((d) => d.name).join(", ")
                           : "None assigned"}
                       </td>
-                      <td className="py-4 px-4">
-                        <div className="flex justify-end">
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            className="gap-1.5"
-                            onClick={() => openEditDialog(user)}
-                            data-testid={`button-edit-user-${user.id}`}
-                          >
-                            <Pencil className="h-4 w-4" />
-                            Edit Roles
-                          </Button>
-                        </div>
+                      <td className="py-4 px-4 text-right">
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" size="icon">
+                              <MoreVertical className="h-4 w-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                            <DropdownMenuItem
+                              onClick={() => openEditDialog(user)}
+                              className="gap-2"
+                            >
+                              <Pencil className="h-4 w-4" />
+                              Edit Roles
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              onClick={() => setResetPasswordUser(user)}
+                              className="gap-2"
+                            >
+                              <KeyRound className="h-4 w-4" />
+                              Reset Password
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem
+                              onClick={() =>
+                                toggleStatusMutation.mutate({
+                                  userId: user.id,
+                                  isActive: !user.isActive,
+                                })
+                              }
+                              disabled={currentUser?.id === user.id}
+                              className={
+                                user.isActive
+                                  ? "text-destructive focus:text-destructive gap-2"
+                                  : "text-green-600 focus:text-green-600 gap-2"
+                              }
+                            >
+                              {user.isActive ? (
+                                <>
+                                  <Lock className="h-4 w-4" /> Deactivate
+                                </>
+                              ) : (
+                                <>
+                                  <Unlock className="h-4 w-4" /> Activate
+                                </>
+                              )}
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
                       </td>
                     </tr>
                   ))}
@@ -284,6 +403,7 @@ export default function ManageUsers() {
         </CardContent>
       </Card>
 
+      {/* Edit Roles Dialog */}
       <Dialog open={!!selectedUser} onOpenChange={() => setSelectedUser(null)}>
         <DialogContent>
           <DialogHeader>
@@ -359,6 +479,57 @@ export default function ManageUsers() {
               {updateRolesMutation.isPending ? "Saving..." : "Save Changes"}
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Reset Password Dialog */}
+      <Dialog
+        open={!!resetPasswordUser}
+        onOpenChange={() => {
+          setResetPasswordUser(null);
+          setNewPassword("");
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Reset Password</DialogTitle>
+            <DialogDescription>
+              Set a new password for {resetPasswordUser?.firstName}{" "}
+              {resetPasswordUser?.lastName}.
+            </DialogDescription>
+          </DialogHeader>
+
+          <form onSubmit={handleResetPassword} className="space-y-4">
+            <div className="space-y-2">
+              <label htmlFor="new-password" className="text-sm font-medium">
+                New Password
+              </label>
+              <Input
+                id="new-password"
+                type="password"
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                placeholder="Enter new password"
+                minLength={6}
+                required
+              />
+            </div>
+
+            <DialogFooter>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setResetPasswordUser(null)}
+              >
+                Cancel
+              </Button>
+              <Button type="submit" disabled={resetPasswordMutation.isPending}>
+                {resetPasswordMutation.isPending
+                  ? "Resetting..."
+                  : "Reset Password"}
+              </Button>
+            </DialogFooter>
+          </form>
         </DialogContent>
       </Dialog>
     </div>

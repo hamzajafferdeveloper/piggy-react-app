@@ -1479,6 +1479,85 @@ export class DatabaseStorage implements IStorage {
 
     return (approverResult as Department) ?? null;
   }
+
+  async updateUser(
+    id: string,
+    data: Partial<InsertUser>,
+  ): Promise<User | undefined> {
+    console.log(`storage.updateUser called for ${id} with data:`, data);
+    console.log("Schema users keys:", Object.keys(users));
+    // Drizzle table object keys usually include the column names or configuration
+
+    try {
+      // 1. Explicitly filter undefined values to prevent Drizzle issues
+      const cleanData: any = {};
+
+      // Explicitly check for isActive and password updates
+      if (data.isActive !== undefined)
+        cleanData.isActive = data.isActive ? 1 : 0; // Convert to 1/0 for MySQL if needed, though boolean type handles it usually.
+      // Actually Drizzle handles boolean -> tinyint(1). But if schema is stale, it might ignore it.
+
+      // Let's TRY raw update if we suspect Drizzle is ignoring the column
+      // But we can't easily do raw update without table name string which we have, "users".
+
+      // Let's stick to Drizzle but log explicitly what's happening.
+      if (data.isActive !== undefined) {
+        // Force update using sql operator if needed, but let's try standard update first with explicit logging
+        // actually, if 'users' const doesn't have isActive, this fails.
+        // Fallback: Raw SQL Update
+        // We need to import sql from drizzle-orm
+        // await db.execute(sql`UPDATE users SET is_active = ${data.isActive} WHERE id = ${id}`);
+      }
+
+      Object.keys(data).forEach((key) => {
+        if (data[key as keyof InsertUser] !== undefined) {
+          cleanData[key] = data[key as keyof InsertUser];
+        }
+      });
+
+      // Force include isActive if it exists
+      if (typeof data.isActive === "boolean") {
+        cleanData.isActive = data.isActive;
+      }
+      if (data.password) {
+        cleanData.password = data.password;
+      }
+
+      console.log("Clean data for update:", cleanData);
+
+      await db.update(users).set(cleanData).where(eq(users.id, id));
+
+      // Verify update
+      const [user] = await db.select().from(users).where(eq(users.id, id));
+
+      // If verification fails (e.g. isActive didn't change), try raw SQL
+      if (
+        data.isActive !== undefined &&
+        user &&
+        user.isActive !== data.isActive
+      ) {
+        console.warn(
+          "Drizzle update failed to persist isActive. Attempting raw SQL fallback...",
+        );
+        const val = data.isActive ? 1 : 0;
+        await db.execute(
+          sql`UPDATE users SET is_active = ${val} WHERE id = ${id}`,
+        );
+
+        // Fetch again
+        const [userRetry] = await db
+          .select()
+          .from(users)
+          .where(eq(users.id, id));
+        return userRetry;
+      }
+
+      return user;
+    } catch (error) {
+      console.error("Error in storage.updateUser:", error);
+      throw error;
+    }
+  }
 }
 
 export const storage = new DatabaseStorage();

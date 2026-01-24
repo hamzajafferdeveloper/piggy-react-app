@@ -105,9 +105,6 @@ export default function AuthPage() {
           </div>
           <div className="flex items-center gap-3">
             <ThemeToggle />
-            <Button asChild data-testid="button-login">
-              <Link href="/auth">Sign In</Link>
-            </Button>
           </div>
         </div>
       </nav>

@@ -4,6 +4,7 @@ import fs from "fs";
 import path from "path";
 import multer from "multer";
 import { randomUUID } from "crypto";
+import bcrypt from "bcryptjs";
 import { storage } from "./storage";
 import { isAuthenticated } from "./auth";
 import {
@@ -112,6 +113,107 @@ export async function registerRoutes(
       res.status(500).json({ message: "Failed to fetch user roles" });
     }
   });
+
+  // ===================
+  // USER MANAGEMENT
+  // ===================
+
+  app.patch("/api/users/:id/status", isAuthenticated, async (req, res) => {
+    try {
+      const userId = getUserId(req);
+      if (!(await isAdmin(userId))) {
+        return res.status(403).json({ message: "Admin access required" });
+      }
+
+      const { id } = req.params;
+      const { isActive } = req.body;
+
+      console.log(
+        `[UserId: ${userId}] Attempting to update status for user ${id} to ${isActive}`,
+      );
+
+      if (typeof isActive !== "boolean") {
+        console.warn("isActive is not a boolean:", isActive);
+        return res
+          .status(400)
+          .json({ message: "isActive boolean is required" });
+      }
+
+      // Check if trying to deactivate self
+      if (!isActive && id === userId) {
+        return res
+          .status(400)
+          .json({ message: "Cannot deactivate your own account" });
+      }
+
+      const user = await storage.updateUser(id, { isActive });
+      console.log("Update result:", user ? "Success" : "User not found");
+
+      if (!user) {
+        return res.status(404).json({ message: "User not found" });
+      }
+
+      await storage.createAuditLog({
+        userId,
+        action: isActive ? "user_activated" : "user_deactivated",
+        entityType: "user",
+        entityId: id,
+        newValue: String(isActive),
+      });
+
+      res.json(user);
+    } catch (error) {
+      console.error("Error updating user status:", error);
+      res.status(500).json({ message: "Failed to update user status" });
+    }
+  });
+
+  app.post(
+    "/api/users/:id/reset-password",
+    isAuthenticated,
+    async (req, res) => {
+      try {
+        const userId = getUserId(req);
+        if (!(await isAdmin(userId))) {
+          return res.status(403).json({ message: "Admin access required" });
+        }
+
+        const { id } = req.params;
+        const { password } = req.body;
+
+        console.log(
+          `[UserId: ${userId}] Attempting to reset password for user ${id}`,
+        );
+
+        if (!password || typeof password !== "string" || password.length < 6) {
+          return res.status(400).json({
+            message:
+              "Password is required and must be at least 6 characters long",
+          });
+        }
+
+        const hashedPassword = await bcrypt.hash(password, 10);
+        const user = await storage.updateUser(id, { password: hashedPassword });
+        console.log("Password updated:", user ? "Success" : "User not found");
+
+        if (!user) {
+          return res.status(404).json({ message: "User not found" });
+        }
+
+        await storage.createAuditLog({
+          userId,
+          action: "password_reset",
+          entityType: "user",
+          entityId: id,
+        });
+
+        res.json({ message: "Password reset successfully" });
+      } catch (error) {
+        console.error("Error resetting password:", error);
+        res.status(500).json({ message: "Failed to reset password" });
+      }
+    },
+  );
 
   // ===================
   // BALANCE & WITHDRAWALS
