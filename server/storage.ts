@@ -1409,7 +1409,14 @@ export class DatabaseStorage implements IStorage {
     const usersWithRoles = await Promise.all(
       allUsers.map(async (user) => {
         const roles = await this.getUserRoles(user.id);
-        return { ...user, roles };
+        const department = await this.getUserDepartment(user.id);
+
+        // Return array of departments to match frontend interface expected by ManageUsers
+        return {
+          ...user,
+          roles,
+          departments: department ? [department] : [],
+        };
       }),
     );
     return usersWithRoles;

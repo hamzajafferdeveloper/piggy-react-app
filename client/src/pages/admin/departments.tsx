@@ -63,7 +63,7 @@ export default function ManageDepartments() {
   const queryClient = useQueryClient();
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [editingDepartment, setEditingDepartment] = useState<Department | null>(
-    null
+    null,
   );
   const [deletingDepartment, setDeletingDepartment] =
     useState<Department | null>(null);
@@ -97,7 +97,7 @@ export default function ManageDepartments() {
       return apiRequest(
         "POST",
         `/api/departments/${managingUsers?.department.id}/${path}`,
-        { userId }
+        { userId },
       );
     },
     onSuccess: () => {
@@ -110,9 +110,11 @@ export default function ManageDepartments() {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/departments"] });
     },
     onError: (error: Error) => {
+      const parsed = JSON.parse(error.message.replace(/^\d+:\s*/, ""));
+      const message = parsed.message;
       toast({
         title: "Error",
-        description: "Failed to add user.",
+        description: message || "Failed to add user.",
         variant: "destructive",
       });
     },
@@ -124,7 +126,7 @@ export default function ManageDepartments() {
         managingUsers?.type === "approvers" ? "approvers" : "employees";
       return apiRequest(
         "DELETE",
-        `/api/departments/${managingUsers?.department.id}/${path}/${userId}`
+        `/api/departments/${managingUsers?.department.id}/${path}/${userId}`,
       );
     },
     onSuccess: () => {
@@ -431,7 +433,7 @@ export default function ManageDepartments() {
                       <td className="py-4 px-4 text-sm text-muted-foreground">
                         {format(
                           new Date(department.createdAt!),
-                          "MMM dd, yyyy"
+                          "MMM dd, yyyy",
                         )}
                       </td>
                       <td className="py-4 px-4">
@@ -597,10 +599,17 @@ export default function ManageDepartments() {
                   </SelectTrigger>
                   <SelectContent>
                     {allUsers
-                      ?.filter(
-                        (user) =>
-                          !departmentUsers?.some((du) => du.userId === user.id)
-                      )
+                      ?.filter((user) => {
+                        const userDepartments = (user as any).departments || [];
+                        const isAssignedToThis = departmentUsers?.some(
+                          (du) => du.userId === user.id,
+                        );
+                        const isAssignedToAny = userDepartments.length > 0;
+
+                        // Exclude if assigned to ANY department (enforce 1:1)
+                        // Unless it's this department (though UI handles duplicates usually, cleaner to exclude)
+                        return !isAssignedToThis && !isAssignedToAny;
+                      })
                       .map((user) => (
                         <SelectItem key={user.id} value={user.id}>
                           {user.firstName} {user.lastName} ({user.email})
