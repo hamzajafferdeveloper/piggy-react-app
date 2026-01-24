@@ -304,9 +304,41 @@ export async function registerRoutes(
     async (req, res) => {
       try {
         const approverId = getUserId(req);
-        // Add check if user is allowed to approve (manager check) - omitted for brevity/MVP
-        const withdrawal = await storage.approveWithdrawal(
-          req.params.id,
+        const { id } = req.params;
+
+        // Get withdrawal details
+        const withdrawals = await storage.getWithdrawalsByUser("");
+        const withdrawal = withdrawals.find((w) => w.id === id);
+
+        if (!withdrawal) {
+          return res.status(404).json({ message: "Withdrawal not found" });
+        }
+
+        // Check authorization: must be approver of the user's department or admin
+        const isAdminUser = await isAdmin(approverId);
+        const isHRUser = await isHR(approverId);
+
+        if (!isAdminUser && !isHRUser) {
+          // Check if approver for the user's department
+          const userDept = await storage.getUserDepartment(withdrawal.userId);
+          const approverDept = await storage.getUserDepartment(approverId);
+
+          if (!userDept || !approverDept || userDept.id !== approverDept.id) {
+            return res.status(403).json({
+              message: "Not authorized to approve this withdrawal",
+            });
+          }
+
+          // Also check if they have approver role
+          if (!(await isApprover(approverId))) {
+            return res.status(403).json({
+              message: "Approver role required",
+            });
+          }
+        }
+
+        const approvedWithdrawal = await storage.approveWithdrawal(
+          id,
           approverId,
         );
 
@@ -314,12 +346,13 @@ export async function registerRoutes(
           userId: approverId,
           action: "withdrawal_approved",
           entityType: "withdrawal",
-          entityId: req.params.id,
+          entityId: id,
           newValue: "approved",
         });
 
-        res.json(withdrawal);
+        res.json(approvedWithdrawal);
       } catch (error) {
+        console.error("Error approving withdrawal:", error);
         res.status(500).json({ message: "Failed to approve withdrawal" });
       }
     },

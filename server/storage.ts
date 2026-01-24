@@ -1319,8 +1319,9 @@ export class DatabaseStorage implements IStorage {
       )
       .reduce((sum, w) => sum + w.amount, 0);
 
-    const { currentBalance: hoursAvailable } =
-      await this.getUserBalance(userId);
+    // Calculate hours available: current balance minus pending withdrawals
+    const { currentBalance } = await this.getUserBalance(userId);
+    const hoursAvailable = currentBalance - pendingWithdrawalHours;
 
     return {
       totalHoursSubmitted,
