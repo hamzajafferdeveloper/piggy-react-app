@@ -74,7 +74,12 @@ import { FilePreviewModal } from "@/components/file-preview-modal";
 
 export default function Approvals() {
   const { user } = useAuth();
+  // @ts-ignore
   const isAdmin = user?.roles?.includes("admin");
+  // @ts-ignore
+  const isApprover = user?.roles?.includes("approver");
+  // @ts-ignore
+  const approverDepartment = user?.approverDepartment;
 
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -375,10 +380,14 @@ export default function Approvals() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold">
-            {/* {isAdmin
-              ? "Pending Approvals"
-              : `Pending Approvals of ${user?.approverDepartment?.name || "Department"}`} */}
-            Pending Approvals
+            {isAdmin ? (
+              "Pending Approvals"
+            ) : (
+              <>
+                {isApprover &&
+                  "Pending Approvals of " + approverDepartment?.name}
+              </>
+            )}
           </h1>
           <p className="text-muted-foreground">
             Review and approve overtime hour submissions and withdrawals
