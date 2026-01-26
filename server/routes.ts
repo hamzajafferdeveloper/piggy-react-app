@@ -508,13 +508,19 @@ export async function registerRoutes(
           return res.status(400).json({ message: "userId is required" });
         }
 
-        // Check if user already belongs to a department
-        const existingDepartment =
-          await storage.getUserDepartment(approverUserId);
-
-        if (existingDepartment) {
+        // Check if user is already an approver for another department
+        const existingApproverDept = await storage.getApproverDepartment(approverUserId);
+        if (existingApproverDept) {
           return res.status(409).json({
-            message: `User already belongs to another department (${existingDepartment.name}).`,
+            message: `User is already an approver for another department (${existingApproverDept.name}).`,
+          });
+        }
+
+        // Check if user is an employee in the target department (Prevent self-approval/conflict)
+        const existingEmployeeDept = await storage.getEmployeeDepartment(approverUserId);
+        if (existingEmployeeDept && existingEmployeeDept.id === id) {
+          return res.status(409).json({
+            message: `User is already an employee of this department. They cannot be both employee and approver for the same department.`,
           });
         }
 
@@ -628,13 +634,19 @@ export async function registerRoutes(
           return res.status(400).json({ message: "userId is required" });
         }
 
-        // 🔍 NEW: Check if user already belongs to a department
-        const existingDepartment =
-          await storage.getUserDepartment(employeeUserId);
-
-        if (existingDepartment) {
+        // Check if user is already an employee for another department
+        const existingEmployeeDept = await storage.getEmployeeDepartment(employeeUserId);
+        if (existingEmployeeDept) {
           return res.status(409).json({
-            message: `User already belongs to another department (${existingDepartment.name}).`,
+            message: `User is already an employee of another department (${existingEmployeeDept.name}).`,
+          });
+        }
+
+        // Check if user is an approver in the target department
+        const existingApproverDept = await storage.getApproverDepartment(employeeUserId);
+        if (existingApproverDept && existingApproverDept.id === departmentId) {
+          return res.status(409).json({
+            message: `User is already an approver for this department. They cannot be both employee and approver for the same department.`,
           });
         }
 
@@ -784,12 +796,11 @@ export async function registerRoutes(
 
         // If departmentId is NOT provided, fetch it
         if (!departmentId) {
-          // Get user's primary department (first one found)
           const userDepts = await storage.getEmployeeDepartments(userId);
           if (userDepts.length === 0) {
             return res.status(400).json({
               message:
-                "You are not assigned to any department. Please contact HR.",
+                "You are not assigned to any department. Please contact Admin.",
             });
           }
           departmentId = userDepts[0].departmentId;
@@ -798,7 +809,7 @@ export async function registerRoutes(
         const data = insertHoursSubmissionSchema.parse({
           ...req.body,
           totalHours: submittedTotalHours,
-          departmentId, // Injected or validated
+          departmentId,
           userId,
           date: new Date(req.body.date),
           attachments:

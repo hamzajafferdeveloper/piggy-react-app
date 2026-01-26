@@ -601,14 +601,15 @@ export default function ManageDepartments() {
                     {allUsers
                       ?.filter((user) => {
                         const userDepartments = (user as any).departments || [];
+                        const userRoles = (user as any).roles || [];
+
                         const isAssignedToThis = departmentUsers?.some(
                           (du) => du.userId === user.id,
                         );
+
                         const isAssignedToAny = userDepartments.length > 0;
 
-                        // Exclude if assigned to ANY department (enforce 1:1)
-                        // Unless it's this department (though UI handles duplicates usually, cleaner to exclude)
-                        return !isAssignedToThis && !isAssignedToAny;
+                        return !isAssignedToThis;
                       })
                       .map((user) => (
                         <SelectItem key={user.id} value={user.id}>

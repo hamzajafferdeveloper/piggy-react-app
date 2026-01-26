@@ -23,13 +23,6 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
   Form,
   FormControl,
   FormDescription,
@@ -40,7 +33,6 @@ import {
 } from "@/components/ui/form";
 import { useToast } from "@/hooks/use-toast";
 import { FormSkeleton } from "@/components/loading-skeleton";
-import { apiRequest } from "@/lib/queryClient";
 import { isUnauthorizedError } from "@/lib/auth-utils";
 import { format } from "date-fns";
 import { CalendarIcon, Clock, ArrowLeft } from "lucide-react";
@@ -122,54 +114,9 @@ export default function SubmitHours() {
       ? calculateHoursFromTimeRange(startTime, endTime)
       : totalHours;
 
-  // const submitMutation = useMutation({
-  //   mutationFn: async (data: FormData) => {
-  //     const payload = {
-  //       departmentId: data.departmentId,
-  //       date: data.date.toISOString(),
-  //       startTime: data.useTimeRange ? data.startTime : null,
-  //       endTime: data.useTimeRange ? data.endTime : null,
-  //       totalHours: data.useTimeRange
-  //         ? calculateHoursFromTimeRange(data.startTime!, data.endTime!)
-  //         : data.totalHours,
-  //       notes: data.notes || null,
-  //     };
-  //     return apiRequest("POST", "/api/submissions", payload);
-  //   },
-  //   onSuccess: () => {
-  //     toast({
-  //       title: "Success",
-  //       description: "Your hours submission has been sent for approval.",
-  //     });
-  //     queryClient.invalidateQueries({ queryKey: ["/api/submissions"] });
-  //     queryClient.invalidateQueries({ queryKey: ["/api/dashboard/stats"] });
-  //     navigate("/records");
-  //   },
-  //   onError: (error: Error) => {
-  //     if (isUnauthorizedError(error)) {
-  //       toast({
-  //         title: "Unauthorized",
-  //         description: "Logging in again...",
-  //         variant: "destructive",
-  //       });
-  //       setTimeout(() => {
-  //         window.location.href = "/api/login";
-  //       }, 500);
-  //       return;
-  //     }
-  //     toast({
-  //       title: "Error",
-  //       description: "Failed to submit hours. Please try again.",
-  //       variant: "destructive",
-  //     });
-  //   },
-  // });
-
   const submitMutation = useMutation({
     mutationFn: async (data: FormData) => {
       const formData = new FormData();
-
-      // formData.append("departmentId", data.departmentId); // Removed
       formData.append("date", data.date.toISOString());
       formData.append(
         "totalHours",
@@ -287,8 +234,6 @@ export default function SubmitHours() {
                   className="space-y-6"
                 >
                   <div className="grid gap-6 md:grid-cols-2">
-                    {/* Department Removed */}
-
                     <FormField
                       control={form.control}
                       name="date"

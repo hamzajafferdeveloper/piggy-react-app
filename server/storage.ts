@@ -46,6 +46,8 @@ export interface IStorage {
     (Department & { employeeCount: number; approverCount: number })[]
   >;
   getUserDepartment(userId: string): Promise<Department | null>;
+  getEmployeeDepartment(userId: string): Promise<Department | null>;
+  getApproverDepartment(userId: string): Promise<Department | null>;
 
   // User Roles
   getUserRoles(userId: string): Promise<UserRole[]>;
@@ -607,9 +609,9 @@ export class DatabaseStorage implements IStorage {
       .delete(employeeDepartments)
       .where(eq(employeeDepartments.userId, data.userId));
 
-    await db
-      .delete(departmentApprovers)
-      .where(eq(departmentApprovers.userId, data.userId));
+    // await db
+    //   .delete(departmentApprovers)
+    //   .where(eq(departmentApprovers.userId, data.userId));
 
     const id = randomUUID();
     await db.insert(employeeDepartments).values({ ...data, id });
@@ -734,9 +736,9 @@ export class DatabaseStorage implements IStorage {
       .delete(employeeDepartments)
       .where(eq(employeeDepartments.userId, data.userId));
 
-    await db
-      .delete(departmentApprovers)
-      .where(eq(departmentApprovers.userId, data.userId));
+    // await db
+    //   .delete(departmentApprovers)
+    //   .where(eq(departmentApprovers.userId, data.userId));
 
     const id = randomUUID();
     await db.insert(departmentApprovers).values({ ...data, id });
@@ -1435,7 +1437,11 @@ export class DatabaseStorage implements IStorage {
     const userRoleRecords = await this.getUserRoles(id);
     const roles = userRoleRecords.map((r) => r.role);
 
-    return { ...user, roles };
+    const department = await this.getUserDepartment(id);
+    const employeeDepartment = await this.getEmployeeDepartment(id);
+    const approverDepartment = await this.getApproverDepartment(id);
+
+    return { ...user, roles, department, employeeDepartment, approverDepartment };
   }
 
   async getUserByEmail(email: string): Promise<User | undefined> {
@@ -1486,6 +1492,42 @@ export class DatabaseStorage implements IStorage {
       .where(eq(departmentApprovers.userId, userId));
 
     return (approverResult as Department) ?? null;
+  }
+
+  async getEmployeeDepartment(userId: string): Promise<Department | null> {
+    const [result] = await db
+      .select({
+        id: departments.id,
+        name: departments.name,
+        description: departments.description,
+        createdAt: departments.createdAt,
+      })
+      .from(employeeDepartments)
+      .innerJoin(
+        departments,
+        eq(employeeDepartments.departmentId, departments.id),
+      )
+      .where(eq(employeeDepartments.userId, userId));
+
+    return (result as Department) ?? null;
+  }
+
+  async getApproverDepartment(userId: string): Promise<Department | null> {
+    const [result] = await db
+      .select({
+        id: departments.id,
+        name: departments.name,
+        description: departments.description,
+        createdAt: departments.createdAt,
+      })
+      .from(departmentApprovers)
+      .innerJoin(
+        departments,
+        eq(departmentApprovers.departmentId, departments.id),
+      )
+      .where(eq(departmentApprovers.userId, userId));
+
+    return (result as Department) ?? null;
   }
 
   async updateUser(

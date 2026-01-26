@@ -32,6 +32,7 @@ import { EmptyState } from "@/components/empty-state";
 import { TableSkeleton } from "@/components/loading-skeleton";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
+import { useAuth } from "@/hooks/use-auth";
 import { isUnauthorizedError } from "@/lib/auth-utils";
 import { format } from "date-fns";
 import {
@@ -72,6 +73,9 @@ type AttachmentMeta = {
 import { FilePreviewModal } from "@/components/file-preview-modal";
 
 export default function Approvals() {
+  const { user } = useAuth();
+  const isAdmin = user?.roles?.includes("admin");
+
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [selectedSubmission, setSelectedSubmission] =
@@ -351,7 +355,7 @@ export default function Approvals() {
   });
 
   const filteredItems = allPendingItems.filter((item) => {
-    if (departmentFilter !== "all" && item.departmentId !== departmentFilter)
+    if (departmentFilter !== "all" && item.department?.id !== departmentFilter)
       return false;
     return true;
   });
@@ -370,7 +374,12 @@ export default function Approvals() {
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold">Pending Approvals</h1>
+          <h1 className="text-2xl font-bold">
+            {/* {isAdmin
+              ? "Pending Approvals"
+              : `Pending Approvals of ${user?.approverDepartment?.name || "Department"}`} */}
+            Pending Approvals
+          </h1>
           <p className="text-muted-foreground">
             Review and approve overtime hour submissions and withdrawals
           </p>
@@ -381,29 +390,34 @@ export default function Approvals() {
         </Badge>
       </div>
 
-      <Card>
-        <CardHeader className="flex flex-row items-center justify-between gap-4 space-y-0">
-          <div>
-            <CardTitle className="text-lg">Filter by Department</CardTitle>
-          </div>
-          <Select value={departmentFilter} onValueChange={setDepartmentFilter}>
-            <SelectTrigger
-              className="w-48"
-              data-testid="select-department-filter"
+      {isAdmin && (
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between gap-4 space-y-0">
+            <div>
+              <CardTitle className="text-lg">Filter by Department</CardTitle>
+            </div>
+            <Select
+              value={departmentFilter}
+              onValueChange={setDepartmentFilter}
             >
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Departments</SelectItem>
-              {departments?.map((dept) => (
-                <SelectItem key={dept.id} value={dept.id}>
-                  {dept.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </CardHeader>
-      </Card>
+              <SelectTrigger
+                className="w-48"
+                data-testid="select-department-filter"
+              >
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Departments</SelectItem>
+                {departments?.map((dept) => (
+                  <SelectItem key={dept.id} value={dept.id}>
+                    {dept.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </CardHeader>
+        </Card>
+      )}
 
       <Card>
         <CardHeader>

@@ -33,4 +33,10 @@ export const users = mysqlTable("users", {
 
 export type UpsertUser = typeof users.$inferInsert;
 export type User = typeof users.$inferSelect;
-export type UserWithRoles = User & { roles: string[] };
+export type UserWithRoles = User & {
+  roles: string[];
+  department?: any; // Deprecated, keeping for backward compat temporarily
+  employeeDepartment?: any;
+  approverDepartment?: any;
+};
+
