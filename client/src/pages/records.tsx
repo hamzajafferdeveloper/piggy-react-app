@@ -897,12 +897,12 @@ export default function Records() {
 
                 {(selectedSubmission as any).approvedBy && (
                   <div className="bg-green-50 p-3 rounded-md border border-green-100">
-                    <h4 className="text-sm font-medium text-green-800 mb-1">
+                    {/* <h4 className="text-sm font-medium text-green-800 mb-1">
                       Approved By
                     </h4>
                     <p className="text-sm text-green-700 break-all">
                       {(selectedSubmission as any).approvedBy}
-                    </p>
+                    </p> */}
                     <p className="text-xs text-green-600 mt-1">
                       {(selectedSubmission as any).approvedAt
                         ? format(

@@ -199,6 +199,7 @@ export interface IStorage {
   getPendingWithdrawals(approverId: string): Promise<any[]>;
   getAllPendingWithdrawals(): Promise<any[]>;
   getPendingWithdrawalApprovals(approverId: string): Promise<any[]>;
+  getApproverDepartmentIds(userId: string): Promise<string[]>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -839,10 +840,12 @@ export class DatabaseStorage implements IStorage {
     page = 1,
     limit = 10,
     search = "",
+    departmentIds,
   }: {
     page?: number;
     limit?: number;
     search?: string;
+    departmentIds?: string[];
   } = {}): Promise<{ submissions: any[]; total: number }> {
     const offset = (page - 1) * limit;
 
@@ -871,27 +874,40 @@ export class DatabaseStorage implements IStorage {
       .leftJoin(departments, eq(hoursSubmissions.departmentId, departments.id))
       .$dynamic();
 
-    // Add search conditions if search term exists
+    // Add filtering conditions
+    const conditions = [];
+
     if (search) {
       const searchTerm = `%${search.toLowerCase()}%`;
-      query = query.where(
+      conditions.push(
         or(
-          // sql`LOWER(${users.name}) LIKE ${searchTerm}`,
           sql`LOWER(${users.email}) LIKE ${searchTerm}`,
           sql`LOWER(${departments.name}) LIKE ${searchTerm}`,
-          // sql`LOWER(${hoursSubmissions.description}) LIKE ${searchTerm}`,
         ),
       );
     }
 
+    if (departmentIds && departmentIds.length > 0) {
+      conditions.push(inArray(hoursSubmissions.departmentId, departmentIds));
+    }
+
+    if (conditions.length > 0) {
+      query = query.where(and(...conditions));
+    }
+
     // Get total count
-    const countResult = await db
+    let countQuery = db
       .select({ count: sql<number>`count(*)` })
       .from(hoursSubmissions)
       .leftJoin(users, eq(hoursSubmissions.userId, users.id))
       .leftJoin(departments, eq(hoursSubmissions.departmentId, departments.id))
       .$dynamic();
 
+    if (conditions.length > 0) {
+      countQuery = countQuery.where(and(...conditions));
+    }
+
+    const countResult = await countQuery;
     const total = countResult[0]?.count || 0;
 
     // Get paginated results
@@ -1630,6 +1646,14 @@ export class DatabaseStorage implements IStorage {
       console.error("Error in storage.updateUser:", error);
       throw error;
     }
+  }
+
+  async getApproverDepartmentIds(userId: string): Promise<string[]> {
+    const approverDepts = await db
+      .select()
+      .from(departmentApprovers)
+      .where(eq(departmentApprovers.userId, userId));
+    return approverDepts.map((d) => d.departmentId);
   }
 }
 

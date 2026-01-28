@@ -43,10 +43,10 @@ export function AppSidebar() {
   const primaryRole = isAdmin
     ? "admin"
     : isHR
-    ? "hr"
-    : isApprover
-    ? "approver"
-    : "employee";
+      ? "hr"
+      : isApprover
+        ? "approver"
+        : "employee";
 
   const employeeMenuItems = [
     { title: "Dashboard", url: "/dashboard", icon: LayoutDashboard },
@@ -56,7 +56,7 @@ export function AppSidebar() {
 
   const approverMenuItems = [
     { title: "Pending Approvals", url: "/approvals", icon: CheckSquare },
-    // { title: "All Approvals", url: "/approvals/all", icon: CheckSquare },
+    { title: "All Approvals", url: "/approvals/all", icon: CheckSquare },
   ];
 
   const adminMenuItems = [

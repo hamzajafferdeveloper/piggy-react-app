@@ -25,7 +25,13 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { MoreHorizontal, Pencil, Trash2, CheckCircle, XCircle } from "lucide-react";
+import {
+  MoreHorizontal,
+  Pencil,
+  Trash2,
+  CheckCircle,
+  XCircle,
+} from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
@@ -37,7 +43,7 @@ interface Submission {
   id: string;
   date: string;
   hours: number;
-  status: 'pending' | 'approved' | 'rejected' | 'escalated';
+  status: "pending" | "approved" | "rejected" | "escalated";
   description: string;
   department: string;
   user: {
@@ -46,42 +52,48 @@ interface Submission {
   };
 }
 
-const fetchSubmissions = async (page = 1, search = '') => {
+const fetchSubmissions = async (page = 1, search = "") => {
   try {
     const res = await fetch(
       `/api/submissions/all?page=${page}&limit=${ITEMS_PER_PAGE}&search=${encodeURIComponent(search)}`,
       {
         headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
+          "Content-Type": "application/json",
+          Accept: "application/json",
         },
-        credentials: 'include',
-      }
+        credentials: "include",
+      },
     );
-    
 
     console.log("RES: ", res);
 
     const data = await res.json(); // Parse the response once
-    
+
     console.log("RES JSON: ", data);
 
     if (!res.ok) {
-      console.error('API Error Response:', data);
-      throw new Error(data.message || `Failed to fetch submissions: ${res.status} ${res.statusText}`);
+      console.error("API Error Response:", data);
+      throw new Error(
+        data.message ||
+          `Failed to fetch submissions: ${res.status} ${res.statusText}`,
+      );
     }
-    
-    console.log('API Response:', data);
+
+    console.log("API Response:", data);
     return data;
   } catch (error) {
-    console.error('Fetch error:', error);
-    throw new Error(error instanceof Error ? error.message : 'Failed to fetch submissions. Please try again later.');
+    console.error("Fetch error:", error);
+    throw new Error(
+      error instanceof Error
+        ? error.message
+        : "Failed to fetch submissions. Please try again later.",
+    );
   }
 };
 
 const AllApprovals = () => {
   const [currentPage, setCurrentPage] = useState(1);
-  const [searchTerm, setSearchTerm] = useState('');
+  const [searchTerm, setSearchTerm] = useState("");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editData, setEditData] = useState<Partial<Submission> | null>(null);
   const { toast } = useToast();
@@ -100,7 +112,13 @@ const AllApprovals = () => {
   });
 
   const updateSubmission = useMutation({
-    mutationFn: async ({ id, data }: { id: string; data: Partial<Submission> }) => {
+    mutationFn: async ({
+      id,
+      data,
+    }: {
+      id: string;
+      data: Partial<Submission>;
+    }) => {
       return apiRequest("PATCH", `/api/submissions/${id}`, data);
     },
     onSuccess: () => {
@@ -156,8 +174,8 @@ const AllApprovals = () => {
     }
   };
 
-  const handleStatusChange = (status: Submission['status']) => {
-    setEditData(prev => ({
+  const handleStatusChange = (status: Submission["status"]) => {
+    setEditData((prev) => ({
       ...prev,
       status,
     }));
@@ -180,8 +198,6 @@ const AllApprovals = () => {
       </div>
     );
   }
-
-
 
   return (
     <div className="space-y-6">
@@ -235,7 +251,7 @@ const AllApprovals = () => {
             {submissions.map((submission: Submission) => (
               <TableRow key={submission.id}>
                 <TableCell className="font-medium">
-                  {format(new Date(submission.date), 'MMM dd, yyyy')}
+                  {format(new Date(submission.date), "MMM dd, yyyy")}
                 </TableCell>
                 <TableCell>
                   <div className="font-medium">{submission.user.name}</div>
@@ -243,7 +259,11 @@ const AllApprovals = () => {
                     {submission.user.email}
                   </div>
                 </TableCell>
-                <TableCell>{submission.department}</TableCell>
+                <TableCell>
+                  {typeof submission.department === "string"
+                    ? submission.department
+                    : submission.department.name}
+                </TableCell>
                 <TableCell>
                   {editingId === submission.id ? (
                     <Input
@@ -266,7 +286,7 @@ const AllApprovals = () => {
                 <TableCell>
                   {editingId === submission.id ? (
                     <Input
-                      value={editData?.description || ''}
+                      value={editData?.description || ""}
                       onChange={(e) =>
                         setEditData({
                           ...editData!,
@@ -285,7 +305,9 @@ const AllApprovals = () => {
                     <select
                       value={editData?.status}
                       onChange={(e) =>
-                        handleStatusChange(e.target.value as Submission['status'])
+                        handleStatusChange(
+                          e.target.value as Submission["status"],
+                        )
                       }
                       className="border rounded p-1 text-sm"
                     >
@@ -307,7 +329,7 @@ const AllApprovals = () => {
                         onClick={() => handleSave(submission.id)}
                         disabled={updateSubmission.isLoading}
                       >
-                        {updateSubmission.isLoading ? 'Saving...' : 'Save'}
+                        {updateSubmission.isLoading ? "Saving..." : "Save"}
                       </Button>
                       <Button
                         variant="outline"
@@ -338,7 +360,11 @@ const AllApprovals = () => {
                         </DropdownMenuItem>
                         <DropdownMenuItem
                           onClick={() => {
-                            if (window.confirm('Are you sure you want to delete this submission?')) {
+                            if (
+                              window.confirm(
+                                "Are you sure you want to delete this submission?",
+                              )
+                            ) {
                               deleteSubmission.mutate(submission.id);
                             }
                           }}
@@ -347,12 +373,12 @@ const AllApprovals = () => {
                           <Trash2 className="mr-2 h-4 w-4" />
                           <span>Delete</span>
                         </DropdownMenuItem>
-                        {submission.status === 'pending' && (
+                        {submission.status === "pending" && (
                           <>
                             <DropdownMenuItem
                               onClick={() => {
                                 handleEdit(submission);
-                                handleStatusChange('approved');
+                                handleStatusChange("approved");
                                 handleSave(submission.id);
                               }}
                               className="cursor-pointer text-green-600"
@@ -363,7 +389,7 @@ const AllApprovals = () => {
                             <DropdownMenuItem
                               onClick={() => {
                                 handleEdit(submission);
-                                handleStatusChange('rejected');
+                                handleStatusChange("rejected");
                                 handleSave(submission.id);
                               }}
                               className="cursor-pointer text-red-600"
@@ -398,7 +424,11 @@ const AllApprovals = () => {
                   onClick={() =>
                     setCurrentPage((prev) => Math.max(prev - 1, 1))
                   }
-                  className={currentPage === 1 ? 'pointer-events-none opacity-50' : 'cursor-pointer'}
+                  className={
+                    currentPage === 1
+                      ? "pointer-events-none opacity-50"
+                      : "cursor-pointer"
+                  }
                 />
               </PaginationItem>
               {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
@@ -431,7 +461,11 @@ const AllApprovals = () => {
                   onClick={() =>
                     setCurrentPage((prev) => Math.min(prev + 1, totalPages))
                   }
-                  className={currentPage === totalPages ? 'pointer-events-none opacity-50' : 'cursor-pointer'}
+                  className={
+                    currentPage === totalPages
+                      ? "pointer-events-none opacity-50"
+                      : "cursor-pointer"
+                  }
                 />
               </PaginationItem>
             </PaginationContent>

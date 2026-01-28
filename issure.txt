@@ -1,13 +1,10 @@
 We are facing multiple related issues in our hours management system.
 
-Issue 1 – Over-withdrawal bug:
-A user can withdraw hours, then immediately attempt another withdrawal without refreshing the page. The system allows over-withdrawal, resulting in negative hours, because the previously withdrawn hours remain in a “pending” state but are still counted as available.
-
-Issue 2 – Dashboard not updating in real time:
+Issue 1 – Dashboard not updating in real time:
 When users add or withdraw hours, the dashboard does not consistently reflect the changes automatically. In some cases, a manual browser refresh (CTRL + R) is required. This behavior is inconsistent and confusing for users.
 
-Issue 3 – Missing approval history for approvers:
+Issue 2 – Missing approval history for approvers:
 After an approver approves or denies pending requests within their department, they can no longer view the approval/denial history. The records appear to disappear entirely, making it impossible to audit past decisions.
 
 Task:
-Analyze these issues, identify likely root causes (state management, backend validation, caching, or data lifecycle problems), and propose clear, practical fixes to prevent negative balances, ensure real-time UI updates, and preserve approval history visibility for approvers.
+Analyze these issues, identify likely root causes (state management, backend validation, caching, or data lifecycle problems), and propose clear, ensure real-time UI updates, and preserve approval history visibility for approvers.

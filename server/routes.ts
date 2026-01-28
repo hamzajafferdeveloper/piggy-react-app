@@ -706,22 +706,42 @@ export async function registerRoutes(
   app.get("/api/submissions/all", isAuthenticated, async (req, res) => {
     try {
       const userId = getUserId(req);
-      if (!(await isAdmin(userId))) {
-        return res.status(403).json({ message: "Admin access required" });
+      const isAdminUser = await isAdmin(userId);
+      const isApproverUser = await isApprover(userId);
+      // const isHRUser = await isHR(userId); // HR usually has broad access, treat like admin or specific role logic
+
+      if (!(isAdminUser || isApproverUser)) {
+        return res
+          .status(403)
+          .json({ message: "Admin or Approver access required" });
       }
 
       const page = parseInt(req.query.page as string) || 1;
       const limit = parseInt(req.query.limit as string) || 10;
       const search = (req.query.search as string) || "";
 
+      let departmentIds: string[] | undefined;
+
+      // If not admin, restrict to approver's departments
+      if (!isAdminUser) {
+        departmentIds = await storage.getApproverDepartmentIds(userId);
+
+        console.log("departmentIds", departmentIds);
+
+        if (departmentIds.length === 0) {
+          // Approver with no department? return empty.
+          return res.json({ submissions: [], total: 0 });
+        }
+      }
+
       const { submissions, total } = await storage.getAllSubmissionsWithDetails(
         {
           page,
           limit,
           search,
+          departmentIds,
         },
       );
-
       res.json({ submissions, total });
     } catch (error) {
       console.error("Error fetching all submissions:", error);
