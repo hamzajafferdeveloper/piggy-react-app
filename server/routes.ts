@@ -508,8 +508,8 @@ export async function registerRoutes(
           return res.status(400).json({ message: "userId is required" });
         }
 
-        // Check if user is already an approver for another department
-        const existingApproverDept = await storage.getApproverDepartment(approverUserId);
+        const existingApproverDept =
+          await storage.getApproverDepartment(approverUserId);
         if (existingApproverDept) {
           return res.status(409).json({
             message: `User is already an approver for another department (${existingApproverDept.name}).`,
@@ -517,11 +517,16 @@ export async function registerRoutes(
         }
 
         // Check if user is an employee in the target department (Prevent self-approval/conflict)
-        const existingEmployeeDept = await storage.getEmployeeDepartment(approverUserId);
+        const existingEmployeeDept =
+          await storage.getEmployeeDepartment(approverUserId);
         if (existingEmployeeDept && existingEmployeeDept.id === id) {
           return res.status(409).json({
             message: `User is already an employee of this department. They cannot be both employee and approver for the same department.`,
           });
+        }
+
+        if (!(await isApprover(approverUserId))) {
+          await storage.addApproverRole(approverUserId);
         }
 
         await storage.addDepartmentApprover({
@@ -635,7 +640,8 @@ export async function registerRoutes(
         }
 
         // Check if user is already an employee for another department
-        const existingEmployeeDept = await storage.getEmployeeDepartment(employeeUserId);
+        const existingEmployeeDept =
+          await storage.getEmployeeDepartment(employeeUserId);
         if (existingEmployeeDept) {
           return res.status(409).json({
             message: `User is already an employee of another department (${existingEmployeeDept.name}).`,
@@ -643,7 +649,8 @@ export async function registerRoutes(
         }
 
         // Check if user is an approver in the target department
-        const existingApproverDept = await storage.getApproverDepartment(employeeUserId);
+        const existingApproverDept =
+          await storage.getApproverDepartment(employeeUserId);
         if (existingApproverDept && existingApproverDept.id === departmentId) {
           return res.status(409).json({
             message: `User is already an approver for this department. They cannot be both employee and approver for the same department.`,

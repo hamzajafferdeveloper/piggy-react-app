@@ -519,6 +519,23 @@ export class DatabaseStorage implements IStorage {
     return true;
   }
 
+  async addApproverRole(userId: string): Promise<UserRole> {
+    const id = randomUUID();
+    await db.insert(userRoles).values({ userId, role: "approver", id });
+    const [role] = await db
+      .select()
+      .from(userRoles)
+      .where(eq(userRoles.id, id));
+    return role;
+  }
+
+  async removeApproverRole(userId: string): Promise<boolean> {
+    await db
+      .delete(userRoles)
+      .where(and(eq(userRoles.userId, userId), eq(userRoles.role, "approver")));
+    return true;
+  }
+
   // Employee Departments
   async getEmployeeDepartments(userId: string): Promise<EmployeeDepartment[]> {
     return db
@@ -1441,7 +1458,13 @@ export class DatabaseStorage implements IStorage {
     const employeeDepartment = await this.getEmployeeDepartment(id);
     const approverDepartment = await this.getApproverDepartment(id);
 
-    return { ...user, roles, department, employeeDepartment, approverDepartment };
+    return {
+      ...user,
+      roles,
+      department,
+      employeeDepartment,
+      approverDepartment,
+    };
   }
 
   async getUserByEmail(email: string): Promise<User | undefined> {
