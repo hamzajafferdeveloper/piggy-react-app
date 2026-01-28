@@ -127,7 +127,11 @@ export default function Records() {
       type: "withdrawal" as const,
       department: undefined,
     })) || []),
-  ].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  ].sort(
+    (a, b) =>
+      new Date(b.createdAt || 0).getTime() -
+      new Date(a.createdAt || 0).getTime(),
+  );
 
   const isLoading = submissionsLoading || withdrawalsLoading;
 

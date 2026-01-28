@@ -41,7 +41,10 @@ const ITEMS_PER_PAGE = 10;
 
 interface Submission {
   id: string;
+  type: "submission" | "withdrawal";
   date: string;
+  startTime: string;
+  endTime: string;
   totalHours: number;
   status: "pending" | "approved" | "rejected" | "escalated";
   description: string;
@@ -116,12 +119,18 @@ const AllApprovals = () => {
   const updateSubmission = useMutation({
     mutationFn: async ({
       id,
+      type,
       data,
     }: {
       id: string;
+      type: "submission" | "withdrawal";
       data: Partial<Submission>;
     }) => {
-      return apiRequest("PATCH", `/api/submissions/${id}`, data);
+      const endpoint =
+        type === "submission"
+          ? `/api/submissions/${id}`
+          : `/api/withdrawals/${id}`;
+      return apiRequest("PATCH", endpoint, data);
     },
     onSuccess: () => {
       toast({
@@ -142,8 +151,18 @@ const AllApprovals = () => {
   });
 
   const deleteSubmission = useMutation({
-    mutationFn: async (id: string) => {
-      return apiRequest("DELETE", `/api/submissions/${id}`);
+    mutationFn: async ({
+      id,
+      type,
+    }: {
+      id: string;
+      type: "submission" | "withdrawal";
+    }) => {
+      const endpoint =
+        type === "submission"
+          ? `/api/submissions/${id}`
+          : `/api/withdrawals/${id}`;
+      return apiRequest("DELETE", endpoint);
     },
     onSuccess: () => {
       toast({
@@ -165,14 +184,16 @@ const AllApprovals = () => {
     setEditingId(submission.id);
     setEditData({
       totalHours: submission.totalHours,
+      startTime: submission.startTime,
+      endTime: submission.endTime,
       description: submission.description,
       status: submission.status,
     });
   };
 
-  const handleSave = (id: string) => {
+  const handleSave = (id: string, type: "submission" | "withdrawal") => {
     if (editData) {
-      updateSubmission.mutate({ id, data: editData });
+      updateSubmission.mutate({ id, type, data: editData });
     }
   };
 
@@ -201,19 +222,21 @@ const AllApprovals = () => {
     );
   }
 
+  console.log(submissions);
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold">All Submissions</h1>
+          <h1 className="text-2xl font-bold">Approval History</h1>
           <p className="text-muted-foreground">
-            Review and manage all hour submissions
+            Review and manage all hour submissions and withdrawals
           </p>
         </div>
         <div className="relative w-full sm:w-64">
           <Input
             type="search"
-            placeholder="Search submissions..."
+            placeholder="Search records..."
             value={searchTerm}
             onChange={(e) => {
               setSearchTerm(e.target.value);
@@ -241,9 +264,10 @@ const AllApprovals = () => {
           <TableHeader>
             <TableRow>
               <TableHead>Date</TableHead>
+              <TableHead>Type</TableHead>
               <TableHead>Employee</TableHead>
               <TableHead>Department</TableHead>
-              <TableHead>Hours</TableHead>
+              <TableHead>Time Range</TableHead>
               <TableHead>Description</TableHead>
               <TableHead>Status</TableHead>
               <TableHead className="w-[100px]">Actions</TableHead>
@@ -254,6 +278,17 @@ const AllApprovals = () => {
               <TableRow key={submission.id}>
                 <TableCell className="font-medium">
                   {format(new Date(submission.date), "MMM dd, yyyy")}
+                </TableCell>
+                <TableCell>
+                  <Badge
+                    variant={
+                      submission.type === "withdrawal" ? "outline" : "default"
+                    }
+                  >
+                    {submission.type === "submission"
+                      ? "Submission"
+                      : "Withdrawal"}
+                  </Badge>
                 </TableCell>
                 <TableCell>
                   <div className="font-medium">
@@ -267,21 +302,34 @@ const AllApprovals = () => {
                 <TableCell>{submission.department?.name || "N/A"}</TableCell>
                 <TableCell>
                   {editingId === submission.id ? (
-                    <Input
-                      type="number"
-                      value={editData?.totalHours}
-                      onChange={(e) =>
-                        setEditData({
-                          ...editData!,
-                          totalHours: parseFloat(e.target.value),
-                        })
-                      }
-                      className="w-20"
-                      min="0.5"
-                      step="0.5"
-                    />
+                    <div className="flex flex-col gap-1">
+                      <Input
+                        type="time"
+                        value={editData?.startTime || ""}
+                        onChange={(e) =>
+                          setEditData({
+                            ...editData!,
+                            startTime: e.target.value,
+                          })
+                        }
+                        className="h-8 text-xs py-1"
+                      />
+                      <Input
+                        type="time"
+                        value={editData?.endTime || ""}
+                        onChange={(e) =>
+                          setEditData({
+                            ...editData!,
+                            endTime: e.target.value,
+                          })
+                        }
+                        className="h-8 text-xs py-1"
+                      />
+                    </div>
+                  ) : submission.startTime && submission.endTime ? (
+                    `${submission.startTime} - ${submission.endTime}`
                   ) : (
-                    submission.totalHours
+                    `${submission.type === "withdrawal" ? "-" : ""}${submission.totalHours}h`
                   )}
                 </TableCell>
                 <TableCell>
@@ -327,7 +375,9 @@ const AllApprovals = () => {
                       <Button
                         variant="outline"
                         size="sm"
-                        onClick={() => handleSave(submission.id)}
+                        onClick={() =>
+                          handleSave(submission.id, submission.type)
+                        }
                         disabled={updateSubmission.isLoading}
                       >
                         {updateSubmission.isLoading ? "Saving..." : "Save"}
@@ -363,10 +413,13 @@ const AllApprovals = () => {
                           onClick={() => {
                             if (
                               window.confirm(
-                                "Are you sure you want to delete this submission?",
+                                `Are you sure you want to delete this ${submission.type}?`,
                               )
                             ) {
-                              deleteSubmission.mutate(submission.id);
+                              deleteSubmission.mutate({
+                                id: submission.id,
+                                type: submission.type,
+                              });
                             }
                           }}
                           className="cursor-pointer text-red-600"
@@ -379,8 +432,12 @@ const AllApprovals = () => {
                             <DropdownMenuItem
                               onClick={() => {
                                 handleEdit(submission);
-                                handleStatusChange("approved");
-                                handleSave(submission.id);
+                                // We wait for state update or just use the local var
+                                updateSubmission.mutate({
+                                  id: submission.id,
+                                  type: submission.type,
+                                  data: { status: "approved" },
+                                });
                               }}
                               className="cursor-pointer text-green-600"
                             >
@@ -390,8 +447,11 @@ const AllApprovals = () => {
                             <DropdownMenuItem
                               onClick={() => {
                                 handleEdit(submission);
-                                handleStatusChange("rejected");
-                                handleSave(submission.id);
+                                updateSubmission.mutate({
+                                  id: submission.id,
+                                  type: submission.type,
+                                  data: { status: "rejected" },
+                                });
                               }}
                               className="cursor-pointer text-red-600"
                             >

@@ -294,7 +294,7 @@ export class DatabaseStorage implements IStorage {
         eq(employeeDepartments.departmentId, departments.id),
       )
       .where(eq(hoursWithdrawals.userId, userId))
-      .orderBy(desc(hoursWithdrawals.date));
+      .orderBy(desc(hoursWithdrawals.createdAt));
 
     return withdrawals.map(({ withdrawal, dept }) => ({
       ...withdrawal,
@@ -849,14 +849,16 @@ export class DatabaseStorage implements IStorage {
   } = {}): Promise<{ submissions: any[]; total: number }> {
     const offset = (page - 1) * limit;
 
-    // Base query with joins
-    let query = db
+    // 1. Get filtered submissions
+    let subQuery = db
       .select({
         id: hoursSubmissions.id,
         date: hoursSubmissions.date,
-        // hours: hoursSubmissions.hours,
+        startTime: hoursSubmissions.startTime,
+        endTime: hoursSubmissions.endTime,
         status: hoursSubmissions.status,
-        // description: hoursSubmissions.description,
+        description: hoursSubmissions.notes,
+        totalHours: hoursSubmissions.totalHours,
         createdAt: hoursSubmissions.createdAt,
         updatedAt: hoursSubmissions.updatedAt,
         department: {
@@ -875,52 +877,105 @@ export class DatabaseStorage implements IStorage {
       .leftJoin(departments, eq(hoursSubmissions.departmentId, departments.id))
       .$dynamic();
 
-    // Add filtering conditions
-    const conditions = [];
-
+    const subConditions = [];
     if (search) {
       const searchTerm = `%${search.toLowerCase()}%`;
-      conditions.push(
+      subConditions.push(
         or(
           sql`LOWER(${users.email}) LIKE ${searchTerm}`,
+          sql`LOWER(${departments.name}) LIKE ${searchTerm}`,
+          sql`LOWER(${hoursSubmissions.notes}) LIKE ${searchTerm}`,
+        ),
+      );
+    }
+    if (departmentIds && departmentIds.length > 0) {
+      subConditions.push(inArray(hoursSubmissions.departmentId, departmentIds));
+    }
+    if (subConditions.length > 0)
+      subQuery = subQuery.where(and(...subConditions));
+
+    // 2. Get filtered withdrawals
+    let withQuery = db
+      .select({
+        id: hoursWithdrawals.id,
+        date: hoursWithdrawals.date,
+        startTime: hoursWithdrawals.startTime,
+        endTime: hoursWithdrawals.endTime,
+        status: hoursWithdrawals.status,
+        description: hoursWithdrawals.reason,
+        totalHours: hoursWithdrawals.amount,
+        createdAt: hoursWithdrawals.createdAt,
+        department: {
+          id: departments.id,
+          name: departments.name,
+        },
+        user: {
+          id: users.id,
+          email: users.email,
+          first_name: users.firstName,
+          last_name: users.lastName,
+        },
+      })
+      .from(hoursWithdrawals)
+      .leftJoin(users, eq(hoursWithdrawals.userId, users.id))
+      .leftJoin(
+        employeeDepartments,
+        eq(hoursWithdrawals.userId, employeeDepartments.userId),
+      )
+      .leftJoin(
+        departments,
+        eq(employeeDepartments.departmentId, departments.id),
+      )
+      .$dynamic();
+
+    const withConditions = [];
+    if (search) {
+      const searchTerm = `%${search.toLowerCase()}%`;
+      withConditions.push(
+        or(
+          sql`LOWER(${users.email}) LIKE ${searchTerm}`,
+          sql`LOWER(${hoursWithdrawals.reason}) LIKE ${searchTerm}`,
           sql`LOWER(${departments.name}) LIKE ${searchTerm}`,
         ),
       );
     }
-
+    // Filter withdrawals by user's department if departmentIds is provided
     if (departmentIds && departmentIds.length > 0) {
-      conditions.push(inArray(hoursSubmissions.departmentId, departmentIds));
+      const userDepts = db
+        .select({ userId: employeeDepartments.userId })
+        .from(employeeDepartments)
+        .where(inArray(employeeDepartments.departmentId, departmentIds));
+
+      withConditions.push(inArray(hoursWithdrawals.userId, userDepts));
     }
+    if (withConditions.length > 0)
+      withQuery = withQuery.where(and(...withConditions));
 
-    if (conditions.length > 0) {
-      query = query.where(and(...conditions));
-    }
+    // Execute both
+    const [submissionsResults, withdrawalsResults] = await Promise.all([
+      subQuery,
+      withQuery,
+    ]);
 
-    // Get total count
-    let countQuery = db
-      .select({ count: sql<number>`count(*)` })
-      .from(hoursSubmissions)
-      .leftJoin(users, eq(hoursSubmissions.userId, users.id))
-      .leftJoin(departments, eq(hoursSubmissions.departmentId, departments.id))
-      .$dynamic();
+    // Merge and sort
+    const allRecords = [
+      ...submissionsResults.map((s) => ({
+        ...s,
+        type: "submission" as const,
+      })),
+      ...withdrawalsResults.map((w) => ({
+        ...w,
+        type: "withdrawal" as const,
+        updatedAt: w.createdAt,
+      })),
+    ].sort(
+      (a, b) => (b.createdAt?.getTime() || 0) - (a.createdAt?.getTime() || 0),
+    );
 
-    if (conditions.length > 0) {
-      countQuery = countQuery.where(and(...conditions));
-    }
+    const total = allRecords.length;
+    const paginatedRecords = allRecords.slice(offset, offset + limit);
 
-    const countResult = await countQuery;
-    const total = countResult[0]?.count || 0;
-
-    // Get paginated results
-    const submissions = await query
-      .orderBy(desc(hoursSubmissions.createdAt))
-      .limit(limit)
-      .offset(offset);
-
-    return {
-      submissions,
-      total,
-    };
+    return { submissions: paginatedRecords, total };
   }
 
   async getPendingApprovals(approverId: string): Promise<any[]> {
