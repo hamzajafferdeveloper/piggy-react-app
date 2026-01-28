@@ -20,25 +20,19 @@ export async function registerRoutes(
   httpServer: Server,
   app: Express,
 ): Promise<Server> {
-  // Authentication is handled in index.ts via setupAuth
-
-  // Helper to get user ID from request
   const getUserId = (req: any): string => {
     return req.user?.id;
   };
 
-  // Helper to check if user has role
   const hasRole = async (userId: string, role: string): Promise<boolean> => {
     const roles = await storage.getUserRoles(userId);
     return roles.some((r) => r.role === role);
   };
 
-  // Helper to check if user is admin
   const isAdmin = async (userId: string): Promise<boolean> => {
     return hasRole(userId, "admin");
   };
 
-  // Helper to check if user is approver
   const isApprover = async (userId: string): Promise<boolean> => {
     return (
       hasRole(userId, "approver") ||
@@ -47,7 +41,6 @@ export async function registerRoutes(
     );
   };
 
-  // Helper to check if user is HR
   const isHR = async (userId: string): Promise<boolean> => {
     return hasRole(userId, "hr") || hasRole(userId, "admin");
   };
@@ -92,10 +85,6 @@ export async function registerRoutes(
     }),
   });
 
-  // ===================
-  // USER ROLES
-  // ===================
-
   app.get("/api/user/roles", isAuthenticated, async (req, res) => {
     try {
       const userId = getUserId(req);
@@ -113,10 +102,6 @@ export async function registerRoutes(
       res.status(500).json({ message: "Failed to fetch user roles" });
     }
   });
-
-  // ===================
-  // USER MANAGEMENT
-  // ===================
 
   app.patch("/api/users/:id/status", isAuthenticated, async (req, res) => {
     try {
@@ -215,15 +200,18 @@ export async function registerRoutes(
     },
   );
 
-  // ===================
-  // BALANCE & WITHDRAWALS
-  // ===================
-
   app.get("/api/user/balance", isAuthenticated, async (req, res) => {
     try {
       const userId = getUserId(req);
+      const pendingWithdrawals = await storage.getPendingWithdrawals(userId);
+      const pendingBalance = pendingWithdrawals.reduce(
+        (acc, withdrawal) => acc + withdrawal.amount,
+        0,
+      );
+
+      console.log("pendingBalance", pendingBalance);
       const balance = await storage.getUserBalance(userId);
-      res.json(balance);
+      res.json({ ...balance, pendingBalance });
     } catch (error) {
       console.error("Error fetching user balance:", error);
       res.status(500).json({ message: "Failed to fetch user balance" });
@@ -237,25 +225,26 @@ export async function registerRoutes(
         ...req.body,
         userId,
         date: new Date(req.body.date),
-        status: "pending", // Force pending
+        status: "pending",
       });
 
-      // Validate time range if provided
       if (data.startTime && data.endTime) {
-        // Basic validation that end time is after start time handled by frontend mostly,
-        // but good to ensure they exist.
       }
 
-      // 1. Validate Amount
       if (data.amount <= 0) {
         return res.status(400).json({ message: "Amount must be positive" });
       }
 
-      // 2. Check Balance
       const { currentBalance } = await storage.getUserBalance(userId);
-      if (currentBalance < data.amount) {
+      const pendingWithdrawals = await storage.getPendingWithdrawals(userId);
+      const pendingBalance = pendingWithdrawals.reduce(
+        (acc, withdrawal) => acc + withdrawal.amount,
+        0,
+      );
+
+      if (currentBalance - pendingBalance < data.amount) {
         return res.status(400).json({
-          message: `Insufficient balance. Available: ${currentBalance} hours`,
+          message: `Insufficient balance. Available: ${currentBalance - pendingBalance} hours`,
         });
       }
 
@@ -270,9 +259,7 @@ export async function registerRoutes(
         reason: data.reason,
       });
 
-      // Update audit log if time range provided
       if (data.startTime && data.endTime) {
-        // Could update log or just rely on the entity details
       }
 
       res.status(201).json(withdrawal);
@@ -355,10 +342,6 @@ export async function registerRoutes(
       res.status(500).json({ message: "Failed to reject withdrawal" });
     }
   });
-
-  // ===================
-  // DEPARTMENTS
-  // ===================
 
   app.get("/api/departments", isAuthenticated, async (req, res) => {
     try {
@@ -465,10 +448,6 @@ export async function registerRoutes(
     }
   });
 
-  // ===================
-  // DEPARTMENT APPROVERS
-  // ===================
-
   app.get(
     "/api/departments/:id/approvers",
     isAuthenticated,
@@ -516,7 +495,6 @@ export async function registerRoutes(
           });
         }
 
-        // Check if user is an employee in the target department (Prevent self-approval/conflict)
         const existingEmployeeDept =
           await storage.getEmployeeDepartment(approverUserId);
         if (existingEmployeeDept && existingEmployeeDept.id === id) {
@@ -594,10 +572,6 @@ export async function registerRoutes(
       }
     },
   );
-
-  // ===================
-  // EMPLOYEE DEPARTMENT ASSIGNMENTS
-  // ===================
 
   app.get(
     "/api/departments/:id/employees",
@@ -729,11 +703,6 @@ export async function registerRoutes(
     },
   );
 
-  // ===================
-  // HOURS SUBMISSIONS
-  // ===================
-
-  // Get all submissions (for admin view)
   app.get("/api/submissions/all", isAuthenticated, async (req, res) => {
     try {
       const userId = getUserId(req);
@@ -760,7 +729,6 @@ export async function registerRoutes(
     }
   });
 
-  // Get user's submissions
   app.get("/api/submissions", isAuthenticated, async (req, res) => {
     try {
       const userId = getUserId(req);
@@ -792,7 +760,6 @@ export async function registerRoutes(
 
         const submittedTotalHours = Number(req.body.totalHours);
 
-        // Validate hours increment (strict 0.5 enforcement)
         if (submittedTotalHours % 0.5 !== 0) {
           return res
             .status(400)
@@ -853,10 +820,6 @@ export async function registerRoutes(
       }
     },
   );
-
-  // ===================
-  // APPROVALS
-  // ===================
 
   app.get("/api/approvals/pending", isAuthenticated, async (req, res) => {
     try {
@@ -937,7 +900,6 @@ export async function registerRoutes(
           return res.status(404).json({ message: "Submission not found" });
         }
 
-        // Check if user is an approver for this department
         const canEscalate =
           (await isAdmin(userId)) ||
           (await isHR(userId)) ||
@@ -988,7 +950,6 @@ export async function registerRoutes(
           return res.status(404).json({ message: "Submission not found" });
         }
 
-        // Check if submission is still pending or escalated (state guard)
         if (
           submission.status !== "pending" &&
           submission.status !== "escalated"
@@ -998,14 +959,12 @@ export async function registerRoutes(
             .json({ message: "Submission has already been processed" });
         }
 
-        // Self-approval restriction
         if (submission.userId === userId) {
           return res
             .status(403)
             .json({ message: "Cannot approve your own submission" });
         }
 
-        // Check if user can approve
         let canApprove = false;
         if (submission.status === "escalated") {
           canApprove = await isHR(userId);
@@ -1032,7 +991,6 @@ export async function registerRoutes(
           comment,
         );
 
-        // Create audit log
         await storage.createAuditLog({
           userId,
           action:
@@ -1052,14 +1010,6 @@ export async function registerRoutes(
     },
   );
 
-  // ===================
-  // NEW: SUBMISSION APPROVERS
-  // ===================
-
-  /**
-   * Assign an approver to a specific submission
-   * Permission: Admin or HR only
-   */
   app.post(
     "/api/submissions/:id/approvers",
     isAuthenticated,
@@ -1140,9 +1090,6 @@ export async function registerRoutes(
     },
   );
 
-  /**
-   * Get all assigned approvers for a submission
-   */
   app.get(
     "/api/submissions/:id/approvers",
     isAuthenticated,
@@ -1159,10 +1106,6 @@ export async function registerRoutes(
     },
   );
 
-  /**
-   * Remove an assigned approver from a submission
-   * Permission: Admin or HR only
-   */
   app.delete(
     "/api/submissions/:id/approvers/:approverUserId",
     isAuthenticated,
@@ -1197,14 +1140,6 @@ export async function registerRoutes(
     },
   );
 
-  // ===================
-  // NEW: ADMIN OVERRIDE
-  // ===================
-
-  /**
-   * Override a submission approval (admin only)
-   * Allows admin to force approve/reject with mandatory reason
-   */
   app.post(
     "/api/submissions/:id/override",
     isAuthenticated,
@@ -1267,14 +1202,6 @@ export async function registerRoutes(
     },
   );
 
-  // ===================
-  // NEW: EDIT SUBMISSION
-  // ===================
-
-  /**
-   * Edit a submission
-   * Permission: Owner if pending, Admin/HR for any
-   */
   app.patch(
     "/api/submissions/:id",
     isAuthenticated,
@@ -1391,14 +1318,6 @@ export async function registerRoutes(
     },
   );
 
-  // ===================
-  // NEW: CANCEL SUBMISSION
-  // ===================
-
-  /**
-   * Cancel a submission (soft delete)
-   * Permission: Owner if pending, Admin/HR for any
-   */
   app.post("/api/submissions/:id/cancel", isAuthenticated, async (req, res) => {
     try {
       const userId = getUserId(req);
@@ -1462,9 +1381,6 @@ export async function registerRoutes(
     }
   });
 
-  /**
-   * Un-cancel a submission (admin only)
-   */
   app.post(
     "/api/submissions/:id/uncancel",
     isAuthenticated,
@@ -1514,10 +1430,6 @@ export async function registerRoutes(
     },
   );
 
-  // ===================
-  // DASHBOARD STATS
-  // ===================
-
   app.get("/api/dashboard/stats", isAuthenticated, async (req, res) => {
     try {
       const userId = getUserId(req);
@@ -1528,10 +1440,6 @@ export async function registerRoutes(
       res.status(500).json({ message: "Failed to fetch dashboard stats" });
     }
   });
-
-  // ===================
-  // ADMIN ROUTES
-  // ===================
 
   app.get("/api/admin/stats", isAuthenticated, async (req, res) => {
     try {

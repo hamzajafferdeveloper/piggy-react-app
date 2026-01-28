@@ -79,11 +79,11 @@ export default function WithdrawHours() {
   const [isCalendarOpen, setIsCalendarOpen] = useState(false);
 
   // Fetch balance data
-  const { data: balanceData } = useQuery<{ currentBalance: number }>({
-    queryKey: ["/api/user/balance"],
+  const { data: balanceData } = useQuery<{ hoursAvailable: number }>({
+    queryKey: ["/api/dashboard/stats"],
   });
 
-  const availableBalance = balanceData?.currentBalance || 0;
+  const availableBalance = balanceData?.hoursAvailable || 0;
 
   const form = useForm<FormData>({
     resolver: zodResolver(formSchema),
@@ -153,6 +153,8 @@ export default function WithdrawHours() {
     }
     mutation.mutate(data);
   }
+
+  console.log(balanceData);
 
   return (
     <div className="max-w-2xl mx-auto">
