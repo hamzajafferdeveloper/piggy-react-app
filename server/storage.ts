@@ -226,7 +226,25 @@ export class DatabaseStorage implements IStorage {
         departmentId: dept.id,
       });
     } catch (error) {
-      console.error("Error assigning user to ApproverDepartment:", error);
+      console.error("Error assigning user to Approver Department:", error);
+    }
+  }
+
+  private async removeUserFromApproverDepartment(
+    userId: string,
+  ): Promise<void> {
+    try {
+      const dept = await this.ensureApproverDepartment();
+      await db
+        .delete(employeeDepartments)
+        .where(
+          and(
+            eq(employeeDepartments.userId, userId),
+            eq(employeeDepartments.departmentId, dept.id),
+          ),
+        );
+    } catch (error) {
+      console.error("Error removing user from Approver Department:", error);
     }
   }
 
@@ -523,6 +541,8 @@ export class DatabaseStorage implements IStorage {
 
     if (roles.includes("approver")) {
       await this.assignUserToApproverDepartment(userId);
+    } else {
+      await this.removeUserFromApproverDepartment(userId);
     }
 
     return this.getUserRoles(userId);
@@ -552,6 +572,11 @@ export class DatabaseStorage implements IStorage {
           eq(userRoles.role, role as "employee" | "approver" | "admin"),
         ),
       );
+
+    if (role === "approver") {
+      await this.removeUserFromApproverDepartment(userId);
+    }
+
     return true;
   }
 
@@ -572,6 +597,9 @@ export class DatabaseStorage implements IStorage {
     await db
       .delete(userRoles)
       .where(and(eq(userRoles.userId, userId), eq(userRoles.role, "approver")));
+
+    await this.removeUserFromApproverDepartment(userId);
+
     return true;
   }
 
