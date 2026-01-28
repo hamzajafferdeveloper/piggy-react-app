@@ -270,7 +270,7 @@ const AllApprovals = () => {
               <TableHead>Time Range</TableHead>
               <TableHead>Description</TableHead>
               <TableHead>Status</TableHead>
-              <TableHead className="w-[100px]">Actions</TableHead>
+              {/* <TableHead className="w-[100px]">Actions</TableHead> */}
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -369,7 +369,7 @@ const AllApprovals = () => {
                     <StatusBadge status={submission.status} />
                   )}
                 </TableCell>
-                <TableCell>
+                {/* <TableCell>
                   {editingId === submission.id ? (
                     <div className="flex space-x-2">
                       <Button
@@ -463,7 +463,7 @@ const AllApprovals = () => {
                       </DropdownMenuContent>
                     </DropdownMenu>
                   )}
-                </TableCell>
+                </TableCell> */}
               </TableRow>
             ))}
           </TableBody>

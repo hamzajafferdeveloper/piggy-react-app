@@ -204,6 +204,32 @@ export interface IStorage {
 
 export class DatabaseStorage implements IStorage {
   // Departments
+  private async ensureApproverDepartment(): Promise<Department> {
+    const [existing] = await db
+      .select()
+      .from(departments)
+      .where(eq(departments.name, "Approver Department"));
+
+    if (existing) return existing;
+
+    return this.createDepartment({
+      name: "Approver Department",
+      description: "Default department for all approvers",
+    });
+  }
+
+  private async assignUserToApproverDepartment(userId: string): Promise<void> {
+    try {
+      const dept = await this.ensureApproverDepartment();
+      await this.addEmployeeToDepartment({
+        userId,
+        departmentId: dept.id,
+      });
+    } catch (error) {
+      console.error("Error assigning user to ApproverDepartment:", error);
+    }
+  }
+
   async getDepartments(): Promise<Department[]> {
     return db.select().from(departments).orderBy(departments.name);
   }
@@ -490,9 +516,13 @@ export class DatabaseStorage implements IStorage {
         roles.map((role) => ({
           id: randomUUID(),
           userId,
-          role: role as "employee" | "approver" | "admin",
+          role: role as "employee" | "approver" | "admin" | "hr",
         })),
       );
+    }
+
+    if (roles.includes("approver")) {
+      await this.assignUserToApproverDepartment(userId);
     }
 
     return this.getUserRoles(userId);
@@ -505,6 +535,11 @@ export class DatabaseStorage implements IStorage {
       .select()
       .from(userRoles)
       .where(eq(userRoles.id, id));
+
+    if (data.role === "approver") {
+      await this.assignUserToApproverDepartment(data.userId);
+    }
+
     return role;
   }
 
@@ -527,6 +562,9 @@ export class DatabaseStorage implements IStorage {
       .select()
       .from(userRoles)
       .where(eq(userRoles.id, id));
+
+    await this.assignUserToApproverDepartment(userId);
+
     return role;
   }
 

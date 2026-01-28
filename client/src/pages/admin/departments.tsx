@@ -474,7 +474,7 @@ export default function ManageDepartments() {
                           >
                             <Pencil className="h-4 w-4" />
                           </Button>
-                          <Button
+                          {/* <Button
                             size="icon"
                             variant="ghost"
                             className="text-destructive hover:text-destructive"
@@ -482,7 +482,7 @@ export default function ManageDepartments() {
                             data-testid={`button-delete-department-${department.id}`}
                           >
                             <Trash2 className="h-4 w-4" />
-                          </Button>
+                          </Button> */}
                         </div>
                       </td>
                     </tr>
