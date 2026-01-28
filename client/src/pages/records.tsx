@@ -110,12 +110,14 @@ export default function Records() {
     SubmissionWithDepartment[]
   >({
     queryKey: ["/api/submissions"],
+    refetchInterval: 15000,
   });
 
   const { data: withdrawals, isLoading: withdrawalsLoading } = useQuery<
     HoursWithdrawal[]
   >({
     queryKey: ["/api/withdrawals"],
+    refetchInterval: 15000,
   });
 
   const allRecords: RecordItem[] = [

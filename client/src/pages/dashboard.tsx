@@ -47,21 +47,23 @@ export default function Dashboard() {
     error: statsError,
   } = useQuery<DashboardStats>({
     queryKey: ["/api/dashboard/stats"],
+    refetchInterval: 5000,
   });
 
-  console.log("Dashboard Stats:", stats);
   if (statsError) console.error("Dashboard Stats Error:", statsError);
 
   const { data: balanceData, isLoading: balanceLoading } = useQuery<{
     currentBalance: number;
   }>({
     queryKey: ["/api/user/balance"],
+    refetchInterval: 5000,
   });
 
   const { data: recentSubmissions, isLoading: submissionsLoading } = useQuery<
     SubmissionWithDepartment[]
   >({
     queryKey: ["/api/submissions", "recent"],
+    refetchInterval: 5000,
   });
 
   return (

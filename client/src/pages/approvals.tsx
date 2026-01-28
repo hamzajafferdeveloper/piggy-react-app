@@ -100,12 +100,14 @@ export default function Approvals() {
     SubmissionWithDetails[]
   >({
     queryKey: ["/api/approvals/pending"],
+    refetchInterval: 10000,
   });
 
   const { data: pendingWithdrawals, isLoading: withdrawalsLoading } = useQuery<
     WithdrawalWithDetails[]
   >({
     queryKey: ["/api/approvals/withdrawals"],
+    refetchInterval: 10000,
   });
 
   const isLoading = submissionsLoading || withdrawalsLoading;

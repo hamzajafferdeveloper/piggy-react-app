@@ -865,8 +865,9 @@ export class DatabaseStorage implements IStorage {
         },
         user: {
           id: users.id,
-          // name: users.name,
           email: users.email,
+          first_name: users.firstName,
+          last_name: users.lastName,
         },
       })
       .from(hoursSubmissions)

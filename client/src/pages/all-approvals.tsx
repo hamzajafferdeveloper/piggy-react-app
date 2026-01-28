@@ -42,12 +42,17 @@ const ITEMS_PER_PAGE = 10;
 interface Submission {
   id: string;
   date: string;
-  hours: number;
+  totalHours: number;
   status: "pending" | "approved" | "rejected" | "escalated";
   description: string;
-  department: string;
-  user: {
+  department: {
+    id: string;
     name: string;
+  };
+  user: {
+    id: string;
+    first_name: string;
+    last_name: string;
     email: string;
   };
 }
@@ -65,11 +70,7 @@ const fetchSubmissions = async (page = 1, search = "") => {
       },
     );
 
-    console.log("RES: ", res);
-
-    const data = await res.json(); // Parse the response once
-
-    console.log("RES JSON: ", data);
+    const data = await res.json();
 
     if (!res.ok) {
       console.error("API Error Response:", data);
@@ -109,6 +110,7 @@ const AllApprovals = () => {
     queryKey: ["/api/submissions/all", currentPage, searchTerm],
     queryFn: () => fetchSubmissions(currentPage, searchTerm),
     keepPreviousData: true,
+    refetchInterval: 30000,
   });
 
   const updateSubmission = useMutation({
@@ -162,7 +164,7 @@ const AllApprovals = () => {
   const handleEdit = (submission: Submission) => {
     setEditingId(submission.id);
     setEditData({
-      hours: submission.hours,
+      totalHours: submission.totalHours,
       description: submission.description,
       status: submission.status,
     });
@@ -254,25 +256,24 @@ const AllApprovals = () => {
                   {format(new Date(submission.date), "MMM dd, yyyy")}
                 </TableCell>
                 <TableCell>
-                  <div className="font-medium">{submission.user.name}</div>
+                  <div className="font-medium">
+                    {submission.user?.first_name || "N/A"}{" "}
+                    {submission.user?.last_name || ""}
+                  </div>
                   <div className="text-sm text-muted-foreground">
-                    {submission.user.email}
+                    {submission.user?.email || "N/A"}
                   </div>
                 </TableCell>
-                <TableCell>
-                  {typeof submission.department === "string"
-                    ? submission.department
-                    : submission.department.name}
-                </TableCell>
+                <TableCell>{submission.department?.name || "N/A"}</TableCell>
                 <TableCell>
                   {editingId === submission.id ? (
                     <Input
                       type="number"
-                      value={editData?.hours}
+                      value={editData?.totalHours}
                       onChange={(e) =>
                         setEditData({
                           ...editData!,
-                          hours: parseFloat(e.target.value),
+                          totalHours: parseFloat(e.target.value),
                         })
                       }
                       className="w-20"
@@ -280,7 +281,7 @@ const AllApprovals = () => {
                       step="0.5"
                     />
                   ) : (
-                    submission.hours
+                    submission.totalHours
                   )}
                 </TableCell>
                 <TableCell>
