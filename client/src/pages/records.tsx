@@ -44,13 +44,16 @@ import {
   Edit,
   X,
   RotateCcw,
+  Eye,
 } from "lucide-react";
-import { cn } from "@/lib/utils"; // Import cn
+import { cn } from "@/lib/utils";
 import type {
   HoursSubmission,
   Department,
   HoursWithdrawal,
 } from "@shared/schema";
+import { FilePreviewModal } from "@/components/file-preview-modal";
+import { format } from "date-fns";
 
 interface SubmissionWithDepartment extends HoursSubmission {
   department: Department;
@@ -59,7 +62,6 @@ interface SubmissionWithDepartment extends HoursSubmission {
 
 interface WithdrawalWithDetails extends HoursWithdrawal {
   type: "withdrawal";
-  // Mock department for table consistency if needed, or handle undefined
   department: undefined;
 }
 
@@ -72,11 +74,9 @@ type AttachmentMeta = {
   mimeType: string;
   size: number;
 };
-import { FilePreviewModal } from "@/components/file-preview-modal"; // Added import
-import { format } from "date-fns";
 
 type StatusFilter = "all" | "pending" | "approved" | "rejected";
-type ActionType = "edit" | "cancel" | null;
+type ActionType = "edit" | "cancel" | "view" | null;
 
 export default function Records() {
   const { toast } = useToast();
@@ -88,7 +88,7 @@ export default function Records() {
   const [isFromDateOpen, setIsFromDateOpen] = useState(false);
   const [isToDateOpen, setIsToDateOpen] = useState(false);
   const [selectedSubmission, setSelectedSubmission] =
-    useState<SubmissionWithDepartment | null>(null);
+    useState<RecordItem | null>(null);
   const [actionType, setActionType] = useState<ActionType>(null);
   const [editData, setEditData] = useState({
     totalHours: 0,
@@ -224,13 +224,10 @@ export default function Records() {
     },
   });
 
-  const handleAction = (
-    submission: SubmissionWithDepartment,
-    action: "edit" | "cancel",
-  ) => {
+  const handleAction = (submission: RecordItem, action: ActionType) => {
     setSelectedSubmission(submission);
     setActionType(action);
-    if (action === "edit") {
+    if (action === "edit" && submission.type === "submission") {
       const parsedAttachments = submission.attachments
         ? (JSON.parse(submission.attachments) as AttachmentMeta[])
         : [];
@@ -364,7 +361,7 @@ export default function Records() {
           <CardTitle className="text-lg">Filters</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             <div className="space-y-2">
               <label className="text-sm font-medium">Status</label>
               <Select
@@ -380,26 +377,6 @@ export default function Records() {
                   <SelectItem value="approved">Approved</SelectItem>
                   <SelectItem value="rejected">Rejected</SelectItem>
                   <SelectItem value="withdrawn">Withdrawn</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Department</label>
-              <Select
-                value={departmentFilter}
-                onValueChange={setDepartmentFilter}
-              >
-                <SelectTrigger data-testid="select-department-filter">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Departments</SelectItem>
-                  {departments?.map((dept) => (
-                    <SelectItem key={dept.id} value={dept.id}>
-                      {dept.name}
-                    </SelectItem>
-                  ))}
                 </SelectContent>
               </Select>
             </div>
@@ -622,6 +599,15 @@ export default function Records() {
                         </td>
                         <td className="py-4 px-4">
                           <div className="flex justify-end gap-2">
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="h-8 w-8 p-0"
+                              onClick={() => handleAction(record, "view")}
+                            >
+                              <Eye className="h-4 w-4" />
+                              <span className="sr-only">View Details</span>
+                            </Button>
                             {isSubmission &&
                               record.status === "pending" &&
                               !record.isCancelled && (
@@ -804,31 +790,203 @@ export default function Records() {
 
             <div className="space-y-2">
               <label className="text-sm font-medium">Add Attachments</label>
-              <label className="text-sm font-medium">Add Attachments</label>
               <Input
                 type="file"
                 multiple
                 onChange={(e) => {
-                  const files = Array.from(e.target.files || []);
-                  setNewFiles(files);
+                  if (e.target.files) {
+                    setNewFiles(Array.from(e.target.files));
+                  }
                 }}
               />
             </div>
-            {newFiles.length > 0 && (
-              <div className="text-sm text-muted-foreground">
-                {newFiles.length} file{newFiles.length !== 1 ? "s" : ""}{" "}
-                selected
-              </div>
-            )}
           </div>
 
           <DialogFooter>
-            <Button variant="outline" onClick={() => setActionType(null)}>
+            <Button
+              variant="outline"
+              onClick={() => setActionType(null)}
+              disabled={editMutation.isPending}
+            >
               Cancel
             </Button>
             <Button onClick={confirmAction} disabled={editMutation.isPending}>
               {editMutation.isPending ? "Saving..." : "Save Changes"}
             </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* View Details Dialog */}
+      <Dialog
+        open={actionType === "view"}
+        onOpenChange={() => setActionType(null)}
+      >
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>
+              {selectedSubmission?.type === "submission"
+                ? "Submission Details"
+                : "Withdrawal Details"}
+            </DialogTitle>
+            <DialogDescription>
+              Complete details for this record.
+            </DialogDescription>
+          </DialogHeader>
+
+          {selectedSubmission && (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 py-4">
+              <div className="space-y-4">
+                <div>
+                  <h4 className="text-sm font-medium text-muted-foreground mb-1">
+                    Status
+                  </h4>
+                  <StatusBadge status={selectedSubmission.status} />
+                </div>
+
+                <div>
+                  <h4 className="text-sm font-medium text-muted-foreground mb-1">
+                    Date
+                  </h4>
+                  <div className="flex items-center gap-2">
+                    <CalendarIcon className="h-4 w-4 text-muted-foreground" />
+                    <span className="font-medium">
+                      {format(new Date(selectedSubmission.date), "PPP")}
+                    </span>
+                  </div>
+                </div>
+
+                {selectedSubmission.type === "submission" && (
+                  <div>
+                    <h4 className="text-sm font-medium text-muted-foreground mb-1">
+                      Time & Duration
+                    </h4>
+                    <p className="font-medium">
+                      {selectedSubmission.startTime} -{" "}
+                      {selectedSubmission.endTime}
+                      <span className="text-muted-foreground ml-2">
+                        ({selectedSubmission.totalHours} hours)
+                      </span>
+                    </p>
+                  </div>
+                )}
+
+                {selectedSubmission.type === "withdrawal" && (
+                  <div>
+                    <h4 className="text-sm font-medium text-muted-foreground mb-1">
+                      Amount
+                    </h4>
+                    <p className="font-medium text-red-600">
+                      -{selectedSubmission.amount} hours
+                    </p>
+                  </div>
+                )}
+              </div>
+
+              <div className="space-y-4">
+                <div>
+                  <h4 className="text-sm font-medium text-muted-foreground mb-1">
+                    Submitted On
+                  </h4>
+                  <p className="text-sm">
+                    {selectedSubmission.createdAt
+                      ? format(new Date(selectedSubmission.createdAt), "PPP p")
+                      : "-"}
+                  </p>
+                </div>
+
+                {(selectedSubmission as any).approvedBy && (
+                  <div className="bg-green-50 p-3 rounded-md border border-green-100">
+                    <h4 className="text-sm font-medium text-green-800 mb-1">
+                      Approved By
+                    </h4>
+                    <p className="text-sm text-green-700 break-all">
+                      {(selectedSubmission as any).approvedBy}
+                    </p>
+                    <p className="text-xs text-green-600 mt-1">
+                      {(selectedSubmission as any).approvedAt
+                        ? format(
+                            new Date((selectedSubmission as any).approvedAt),
+                            "PPP p",
+                          )
+                        : ""}
+                    </p>
+                    {(selectedSubmission as any).approverComment && (
+                      <div className="mt-2 pt-2 border-t border-green-200">
+                        <p className="text-xs font-semibold text-green-800">
+                          Comment:
+                        </p>
+                        <p className="text-sm text-green-700">
+                          {(selectedSubmission as any).approverComment}
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                <div>
+                  <h4 className="text-sm font-medium text-muted-foreground mb-1">
+                    {selectedSubmission.type === "submission"
+                      ? "Notes"
+                      : "Reason"}
+                  </h4>
+                  <div className="bg-muted/50 p-3 rounded-md text-sm">
+                    {selectedSubmission.type === "submission"
+                      ? selectedSubmission.notes || "No notes provided."
+                      : (selectedSubmission as any).reason ||
+                        "No reason provided."}
+                  </div>
+                </div>
+
+                {selectedSubmission.type === "submission" &&
+                  selectedSubmission.attachments && (
+                    <div>
+                      <h4 className="text-sm font-medium text-muted-foreground mb-1">
+                        Attachments
+                      </h4>
+                      <div className="flex flex-wrap gap-2">
+                        {(() => {
+                          try {
+                            const atts = JSON.parse(
+                              selectedSubmission.attachments,
+                            ) as AttachmentMeta[];
+                            if (atts.length === 0)
+                              return (
+                                <span className="text-sm text-muted-foreground">
+                                  None
+                                </span>
+                              );
+                            return atts.map((att, i) => (
+                              <a
+                                key={i}
+                                href={att.url}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="flex items-center gap-2 p-2 bg-background border rounded-md hover:bg-accent transition-colors text-xs"
+                              >
+                                <FileText className="h-3 w-3" />
+                                <span className="truncate max-w-[150px]">
+                                  {att.originalName}
+                                </span>
+                              </a>
+                            ));
+                          } catch (e) {
+                            return (
+                              <span className="text-sm text-muted-foreground">
+                                Error loading attachments
+                              </span>
+                            );
+                          }
+                        })()}
+                      </div>
+                    </div>
+                  )}
+              </div>
+            </div>
+          )}
+
+          <DialogFooter>
+            <Button onClick={() => setActionType(null)}>Close</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
