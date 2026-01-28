@@ -940,6 +940,7 @@ export async function registerRoutes(
         // Check if user is an approver for this department
         const canEscalate =
           (await isAdmin(userId)) ||
+          (await isHR(userId)) ||
           (await storage.isUserApproverForDepartment(
             userId,
             submission.departmentId,
@@ -1011,6 +1012,7 @@ export async function registerRoutes(
         } else {
           canApprove =
             (await isAdmin(userId)) ||
+            (await isApprover(userId)) ||
             (await storage.isUserApproverForDepartment(
               userId,
               submission.departmentId,

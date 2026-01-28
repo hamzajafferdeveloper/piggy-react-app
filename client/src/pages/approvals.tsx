@@ -399,7 +399,7 @@ export default function Approvals() {
         </Badge>
       </div>
 
-      {isAdmin && (
+      {!isApprover && (
         <Card>
           <CardHeader className="flex flex-row items-center justify-between gap-4 space-y-0">
             <div>
@@ -582,7 +582,7 @@ export default function Approvals() {
                                   <XCircle className="h-4 w-4" />
                                   Reject
                                 </Button>
-                                {!isWithdrawal && (
+                                {!isApprover && !isWithdrawal && (
                                   <Button
                                     size="sm"
                                     variant="outline"
