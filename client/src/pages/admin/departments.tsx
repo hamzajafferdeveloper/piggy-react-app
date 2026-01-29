@@ -45,6 +45,19 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
 
 const departmentSchema = z.object({
   name: z.string().min(1, "Department name is required").max(100),
@@ -62,6 +75,10 @@ export default function ManageDepartments() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [isCreateOpen, setIsCreateOpen] = useState(false);
+  const [addUserSearch, setAddUserSearch] = useState("");
+  const [currentUserSearch, setCurrentUserSearch] = useState("");
+  const [open, setOpen] = useState(false);
+  const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [editingDepartment, setEditingDepartment] = useState<Department | null>(
     null,
   );
@@ -568,7 +585,11 @@ export default function ManageDepartments() {
       {/* Manage Users Dialog */}
       <Dialog
         open={!!managingUsers}
-        onOpenChange={() => setManagingUsers(null)}
+        onOpenChange={() => {
+          setManagingUsers(null);
+          setAddUserSearch("");
+          setCurrentUserSearch("");
+        }}
       >
         <DialogContent className="max-w-2xl">
           <DialogHeader>
@@ -591,25 +612,30 @@ export default function ManageDepartments() {
                 {managingUsers?.type === "approvers" ? "Approver" : "Employee"}
               </h3>
               <div className="flex gap-2">
-                <Select
+                {/* <Select
                   onValueChange={(userId) => addUserMutation.mutate({ userId })}
                 >
                   <SelectTrigger className="flex-1">
+              <Input
+                placeholder="Search users..."
+                value={addUserSearch}
+                onChange={(e) => setAddUserSearch(e.target.value)}
+              />
                     <SelectValue placeholder="Select a user to add..." />
                   </SelectTrigger>
                   <SelectContent>
                     {allUsers
                       ?.filter((user) => {
-                        const userDepartments = (user as any).departments || [];
-                        const userRoles = (user as any).roles || [];
-
-                        const isAssignedToThis = departmentUsers?.some(
+                        const isAssigned = departmentUsers?.some(
                           (du) => du.userId === user.id,
                         );
 
-                        const isAssignedToAny = userDepartments.length > 0;
+                        const matchesSearch =
+                          `${user.firstName} ${user.lastName} ${user.email}`
+                            .toLowerCase()
+                            .includes(addUserSearch.toLowerCase());
 
-                        return !isAssignedToThis;
+                        return !isAssigned && matchesSearch;
                       })
                       .map((user) => (
                         <SelectItem key={user.id} value={user.id}>
@@ -617,7 +643,55 @@ export default function ManageDepartments() {
                         </SelectItem>
                       ))}
                   </SelectContent>
-                </Select>
+                </Select> */}
+                <Popover open={open} onOpenChange={setOpen}>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      className="w-full justify-between"
+                    >
+                      {selectedUser
+                        ? `${selectedUser.firstName} ${selectedUser.lastName}`
+                        : "Select user"}
+                    </Button>
+                  </PopoverTrigger>
+
+                  <PopoverContent className="w-full p-0">
+                    <Command>
+                      <CommandInput placeholder="Search users..." />
+
+                      <CommandList>
+                        <CommandEmpty>No users found.</CommandEmpty>
+
+                        <CommandGroup>
+                          {allUsers
+                            ?.filter((user) => {
+                              const isAssigned = departmentUsers?.some(
+                                (du) => du.userId === user.id,
+                              );
+                              return !isAssigned;
+                            })
+                            .map((user) => (
+                              <CommandItem
+                                key={user.id}
+                                value={`${user.firstName} ${user.lastName} ${user.email}`}
+                                onSelect={() => {
+                                  setSelectedUser(user);
+                                  addUserMutation.mutate({ userId: user.id });
+                                  setOpen(false);
+                                }}
+                              >
+                                {user.firstName} {user.lastName}
+                                <span className="ml-2 text-xs text-muted-foreground">
+                                  ({user.email})
+                                </span>
+                              </CommandItem>
+                            ))}
+                        </CommandGroup>
+                      </CommandList>
+                    </Command>
+                  </PopoverContent>
+                </Popover>
               </div>
             </div>
 
