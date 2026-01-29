@@ -791,13 +791,29 @@ export async function registerRoutes(
         // If departmentId is NOT provided, fetch it
         if (!departmentId) {
           const userDepts = await storage.getEmployeeDepartments(userId);
-          if (userDepts.length === 0) {
-            return res.status(400).json({
-              message:
-                "You are not assigned to any department. Please contact Admin.",
-            });
+
+          // Case 1: User has assigned departments
+          if (userDepts.length > 0) {
+            departmentId = userDepts[0].departmentId;
           }
-          departmentId = userDepts[0].departmentId;
+          // Case 2: User has NO departments
+          else {
+            const is_approver = await isApprover(userId);
+
+            // Non-approver with no department → error
+            if (!is_approver) {
+              return res.status(400).json({
+                message:
+                  "You are not assigned to any department. Please contact Admin.",
+              });
+            }
+
+            // Approver → assign default approver department
+            const approverDepartment =
+              await storage.getDefaultApproverDepartment();
+
+            departmentId = approverDepartment?.id;
+          }
         }
 
         const data = insertHoursSubmissionSchema.parse({

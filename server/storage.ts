@@ -252,6 +252,14 @@ export class DatabaseStorage implements IStorage {
     return db.select().from(departments).orderBy(departments.name);
   }
 
+  async getDefaultApproverDepartment(): Promise<Department | undefined> {
+    const [dept] = await db
+      .select()
+      .from(departments)
+      .where(eq(departments.name, "Approver Department"));
+    return dept;
+  }
+
   async getDepartment(id: string): Promise<Department | undefined> {
     const [dept] = await db
       .select()
@@ -816,9 +824,9 @@ export class DatabaseStorage implements IStorage {
     data: InsertDepartmentApprover,
   ): Promise<DepartmentApprover> {
     // First, remove any existing department assignments (both employee and approver) to ensure 1:N relationship
-    await db
-      .delete(employeeDepartments)
-      .where(eq(employeeDepartments.userId, data.userId));
+    // await db
+    //   .delete(employeeDepartments)
+    //   .where(eq(employeeDepartments.userId, data.userId));
 
     // await db
     //   .delete(departmentApprovers)
