@@ -101,7 +101,7 @@ export default function AuthPage() {
             <div className="h-10 w-10 rounded-md bg-primary flex items-center justify-center">
               <Clock className="h-6 w-6 text-primary-foreground" />
             </div>
-            <span className="font-semibold text-xl">OvertimeTracker</span>
+            <span className="font-semibold text-xl">Hour Tracker</span>
           </div>
           <div className="flex items-center gap-3">
             <ThemeToggle />
@@ -256,14 +256,15 @@ export default function AuthPage() {
             </Tabs>
           </CardContent>
           <CardFooter className="flex justify-center text-sm text-muted-foreground">
-            © 2026 OverTime Tracker
+            © 2026 Hour Tracker
           </CardFooter>
         </Card>
       </div>
 
       <div className="hidden lg:flex flex-col justify-center p-12 bg-primary text-primary-foreground">
         <div className="max-w-lg space-y-6">
-          <h1 className="text-4xl font-extrabold tracking-tight">
+          <img src="/logo.jpeg" />
+          {/* <h1 className="text-4xl font-extrabold tracking-tight">
             Streamline your workforce management
           </h1>
           <p className="text-lg opacity-90 leading-relaxed">
@@ -280,7 +281,7 @@ export default function AuthPage() {
               <h3 className="text-2xl font-bold">24/7</h3>
               <p className="text-sm opacity-80">Access anywhere</p>
             </div>
-          </div>
+          </div> */}
         </div>
       </div>
     </div>

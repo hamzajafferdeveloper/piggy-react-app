@@ -84,7 +84,7 @@ export function AppSidebar() {
             <Clock className="h-6 w-6 text-primary-foreground" />
           </div>
           <div>
-            <h1 className="font-semibold text-lg">OvertimeTracker</h1>
+            <h1 className="font-semibold text-lg">Hour Tracker</h1>
             <p className="text-xs text-muted-foreground">Hours Management</p>
           </div>
         </div>
